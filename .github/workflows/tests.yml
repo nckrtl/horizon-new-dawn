@@ -158,10 +158,15 @@ jobs:
         id: version
         shell: bash
         run: |
-          latest="$(git describe --tags --abbrev=0 2>/dev/null || echo 'v0.0.0')"
-          version="${latest#v}"
-          IFS='.' read -r major minor patch <<< "$version"
-          next="v${major}.${minor}.$((patch + 1))"
+          latest="$(git tag --list --sort=-version:refname | awk '/^[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')"
+
+          if [[ -z "$latest" ]]; then
+            next="0.1.0"
+          else
+            IFS='.' read -r major minor patch <<< "$latest"
+            next="${major}.${minor}.$((patch + 1))"
+          fi
+
           echo "next=$next" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag

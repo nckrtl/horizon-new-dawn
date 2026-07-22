@@ -36,7 +36,7 @@ Laravel 11 is end-of-life. New Dawn remains runtime-compatible with it, but appl
 Install and configure Laravel Horizon in the host application first. Then install New Dawn and publish its compiled assets:
 
 ```bash
-composer require nckrtl/horizon-new-dawn
+composer require nckrtl/horizon-new-dawn:^0.1.0
 php artisan horizon-new-dawn:install
 ```
 
