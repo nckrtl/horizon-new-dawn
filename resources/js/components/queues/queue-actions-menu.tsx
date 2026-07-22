@@ -1,8 +1,9 @@
 import { router } from "@inertiajs/react";
-import { EllipsisIcon, PauseIcon, PlayIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
+import { PauseIcon, PlayIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { ActionMenuTrigger } from "@/components/ui/action-menu-trigger";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,7 +23,6 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   InputGroup,
@@ -229,27 +229,27 @@ export function QueueActionsMenu({
   const pauseDurationId = `pause-duration-${activeTarget?.connection ?? "queue"}-${queue}`;
   const duration = Number.parseInt(durationMinutes, 10);
   const durationInvalid = !pauseIndefinitely && (!Number.isInteger(duration) || duration < 1);
+  const hasAvailableActions = actionTargets.some((target) => {
+    const hasPendingActions =
+      scope !== "failed" && (queuePausing || (target.total ?? pendingJobs ?? 0) > 0);
+    const hasFailedActions =
+      scope !== "pending" && failedJobs !== undefined && (failedJobs ?? 0) > 0;
+
+    return hasPendingActions || hasFailedActions;
+  });
 
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={
-                scope === "all"
-                  ? `Queue actions for ${queue}`
-                  : `${scope === "pending" ? "Pending" : "Failed"} jobs actions for ${queue}`
-              }
-              disabled={working}
-            />
+        <ActionMenuTrigger
+          available={hasAvailableActions}
+          label={
+            scope === "all"
+              ? `Queue actions for ${queue}`
+              : `${scope === "pending" ? "Pending" : "Failed"} jobs actions for ${queue}`
           }
-        >
-          <EllipsisIcon />
-        </DropdownMenuTrigger>
+          working={working}
+        />
         <DropdownMenuContent align="end" className="w-44">
           {actionTargets.length === 1 ? (
             <QueueActionItems

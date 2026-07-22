@@ -1,8 +1,9 @@
 import { router } from "@inertiajs/react";
-import { BanIcon, EllipsisIcon } from "lucide-react";
+import { BanIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ActionMenuTrigger } from "@/components/ui/action-menu-trigger";
 import {
   Dialog,
   DialogClose,
@@ -17,7 +18,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { destroy as cancelPendingJobs } from "@/generated/routes/horizon-new-dawn/jobs/pending/cancel";
@@ -49,12 +49,18 @@ const cancellationCopy: Record<
   },
 };
 
+const cancellationScopes: PendingCancellationScope[] = ["pending", "ready", "delayed"];
+
 export function PendingJobsActions({
   horizonBaseUrl,
   disabled,
+  queue,
+  counts,
 }: {
   horizonBaseUrl: string;
   disabled: boolean;
+  queue?: string;
+  counts: { ready: number | null; delayed: number | null };
 }) {
   const [scope, setScope] = useState<PendingCancellationScope | null>(null);
   const [working, setWorking] = useState(false);
@@ -65,7 +71,10 @@ export function PendingJobsActions({
       return;
     }
 
-    const route = resolveHorizonRoute(cancelPendingJobs(scope), horizonBaseUrl);
+    const route = resolveHorizonRoute(
+      cancelPendingJobs(scope, queue ? { query: { queue } } : undefined),
+      horizonBaseUrl,
+    );
 
     router.delete(route.url, {
       preserveScroll: true,
@@ -75,26 +84,32 @@ export function PendingJobsActions({
     });
   };
 
+  const availableScopes = cancellationScopes.filter((actionScope) => {
+    if (counts.ready === null || counts.delayed === null) {
+      return false;
+    }
+
+    return actionScope === "ready"
+      ? counts.ready > 0
+      : actionScope === "delayed"
+        ? counts.delayed > 0
+        : counts.ready > 0 && counts.delayed > 0;
+  });
+
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Pending jobs actions"
-              disabled={working}
-            />
-          }
-        >
-          <EllipsisIcon />
-        </DropdownMenuTrigger>
+        <ActionMenuTrigger
+          available={availableScopes.length > 0 && !disabled}
+          label={queue ? `Pending jobs actions for ${queue}` : "Pending jobs actions"}
+          working={working}
+        />
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuGroup>
-            {(Object.entries(cancellationCopy) as [PendingCancellationScope, typeof copy][]).map(
-              ([actionScope, actionCopy]) => (
+            {availableScopes.map((actionScope) => {
+              const actionCopy = cancellationCopy[actionScope];
+
+              return (
                 <DropdownMenuItem
                   key={actionScope}
                   variant="destructive"
@@ -102,10 +117,10 @@ export function PendingJobsActions({
                   onSelect={() => setScope(actionScope)}
                 >
                   <BanIcon />
-                  {actionCopy?.label}
+                  {actionCopy.label}
                 </DropdownMenuItem>
-              ),
-            )}
+              );
+            })}
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -113,8 +128,13 @@ export function PendingJobsActions({
       <Dialog open={scope !== null} onOpenChange={(open) => !open && setScope(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{copy?.title}</DialogTitle>
-            <DialogDescription>{copy?.description}</DialogDescription>
+            <DialogTitle>
+              {copy && queue ? copy.title.replace(/\?$/, ` from ${queue}?`) : copy?.title}
+            </DialogTitle>
+            <DialogDescription>
+              {copy?.description}
+              {queue ? ` This action is limited to the ${queue} queue.` : null}
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="ghost" disabled={working} />}>

@@ -11,16 +11,22 @@ import { useJobFilters } from "@/hooks/use-job-filters";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
 import type { JobsPageProps } from "@/types/jobs";
 
-function JobsIndex({ horizon, type, jobs }: JobsPageProps) {
+function JobsIndex({ horizon, type, pendingCounts, jobs }: JobsPageProps) {
   return (
     <>
       <Head title="Jobs" />
-      <JobsContent key={type} horizon={horizon} type={type} jobs={jobs} />
+      <JobsContent
+        key={type}
+        horizon={horizon}
+        type={type}
+        pendingCounts={pendingCounts}
+        jobs={jobs}
+      />
     </>
   );
 }
 
-function JobsContent({ horizon, type, jobs }: JobsPageProps) {
+function JobsContent({ horizon, type, pendingCounts, jobs }: JobsPageProps) {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const { autoLoad } = useAutoLoadPreference();
@@ -29,6 +35,7 @@ function JobsContent({ horizon, type, jobs }: JobsPageProps) {
     prop: "jobs",
     interval: horizon.pollInterval,
     items: jobs.data,
+    additionalProps: type === "pending" ? pendingRefreshProps : undefined,
     scope: type,
   });
   const jobFilters = useJobFilters(type, refreshedJobs.items);
@@ -77,7 +84,14 @@ function JobsContent({ horizon, type, jobs }: JobsPageProps) {
       }
       actions={
         type === "pending" ? (
-          <PendingJobsActions horizonBaseUrl={horizon.baseUrl} disabled={!jobs.available} />
+          <PendingJobsActions
+            horizonBaseUrl={horizon.baseUrl}
+            counts={{
+              ready: pendingCounts?.ready ?? null,
+              delayed: pendingCounts?.delayed ?? null,
+            }}
+            disabled={!jobs.available || pendingCounts?.available !== true}
+          />
         ) : null
       }
     >
@@ -97,6 +111,8 @@ function JobsContent({ horizon, type, jobs }: JobsPageProps) {
     </JobsPage>
   );
 }
+
+const pendingRefreshProps = ["pendingCounts"];
 
 function LoadingRows() {
   return (

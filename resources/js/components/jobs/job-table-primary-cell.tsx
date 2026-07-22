@@ -42,12 +42,14 @@ export function JobTablePrimaryCell({
       <div className="mt-1 flex min-h-5 flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
         <span>Queue: {queue}</span>
         {details}
-        <JobTags
-          tags={tags}
-          limit={tagLimit}
-          className="gap-1.5"
-          badgeClassName="h-auto px-2 py-px text-[11px] leading-4"
-        />
+        {tags.length > 0 ? (
+          <JobTags
+            tags={tags}
+            limit={tagLimit}
+            className="gap-1.5"
+            badgeClassName="h-auto px-2 py-px text-[11px] leading-4"
+          />
+        ) : null}
       </div>
     </TableCell>
   );

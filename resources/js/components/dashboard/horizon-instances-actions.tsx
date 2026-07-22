@@ -1,9 +1,10 @@
-import { EllipsisIcon, PauseIcon, PlayIcon, PowerIcon } from "lucide-react";
+import { PauseIcon, PlayIcon, PowerIcon } from "lucide-react";
 import { router } from "@inertiajs/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { ActionMenuTrigger } from "@/components/ui/action-menu-trigger";
 import {
   Dialog,
   DialogClose,
@@ -13,12 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import type { RouteDefinition } from "@/generated/wayfinder";
 import {
   destroy as continueHorizon,
@@ -138,19 +134,11 @@ export function HorizonInstancesActions({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Horizon instances actions"
-              disabled={working !== null}
-            />
-          }
-        >
-          <EllipsisIcon />
-        </DropdownMenuTrigger>
+        <ActionMenuTrigger
+          available={hasLocalInstance}
+          label="Horizon instances actions"
+          working={working !== null}
+        />
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem
             variant="destructive"
@@ -259,20 +247,12 @@ export function HorizonInstanceActions({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground hover:text-foreground focus-visible:text-foreground aria-expanded:text-foreground"
-            aria-label={`Horizon instance ${instanceName} actions`}
-            disabled={working !== null}
-          />
-        }
-      >
-        <EllipsisIcon />
-      </DropdownMenuTrigger>
+      <ActionMenuTrigger
+        available={status === "running" || status === "paused"}
+        label={`Horizon instance ${instanceName} actions`}
+        working={working !== null}
+        className="text-muted-foreground hover:text-foreground focus-visible:text-foreground aria-expanded:text-foreground"
+      />
       <DropdownMenuContent align="end" className="w-44">
         {status === "paused" ? (
           <DropdownMenuItem onSelect={resume}>
@@ -356,20 +336,12 @@ export function SupervisorActions({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground hover:text-foreground focus-visible:text-foreground aria-expanded:text-foreground"
-            aria-label={`Supervisor ${supervisor} actions`}
-            disabled={working !== null}
-          />
-        }
-      >
-        <EllipsisIcon />
-      </DropdownMenuTrigger>
+      <ActionMenuTrigger
+        available={status === "running" || status === "paused"}
+        label={`Supervisor ${supervisor} actions`}
+        working={working !== null}
+        className="text-muted-foreground hover:text-foreground focus-visible:text-foreground aria-expanded:text-foreground"
+      />
       <DropdownMenuContent align="end" className="w-48">
         {status === "paused" ? (
           <DropdownMenuItem onSelect={resume}>

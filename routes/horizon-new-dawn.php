@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use NckRtl\HorizonNewDawn\Http\Controllers\BatchCancelController;
-use NckRtl\HorizonNewDawn\Http\Controllers\BatchClearFinishedController;
+use NckRtl\HorizonNewDawn\Http\Controllers\BatchClearController;
 use NckRtl\HorizonNewDawn\Http\Controllers\BatchController;
 use NckRtl\HorizonNewDawn\Http\Controllers\BatchFailedJobClearController;
 use NckRtl\HorizonNewDawn\Http\Controllers\BatchRetryController;
@@ -76,7 +76,9 @@ Route::get('/metrics/{type}/{slug}', [MetricController::class, 'show'])
     ->name('metrics.show');
 
 Route::get('/batches', [BatchController::class, 'index'])->name('batches.index');
-Route::delete('/batches', [BatchClearFinishedController::class, 'destroy'])->name('batches.clear-finished.destroy');
+Route::delete('/batches/{scope}', [BatchClearController::class, 'destroy'])
+    ->where('scope', 'incomplete|complete|finished|cancelled')
+    ->name('batches.clear.destroy');
 Route::get('/batches/{batch}', [BatchController::class, 'show'])->name('batches.show');
 Route::post('/batches/{batch}/cancel', [BatchCancelController::class, 'store'])->name('batches.cancel.store');
 Route::post('/batches/{batch}/retry', [BatchRetryController::class, 'store'])->name('batches.retry.store');

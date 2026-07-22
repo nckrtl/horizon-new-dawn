@@ -36,11 +36,18 @@ it('dispatches one supported Horizon retry job', function (): void {
     );
 });
 
-it('blocks retry children and originals with active completed or unknown retry children', function (): void {
+it('allows jobs that Horizon reports without retry metadata', function (): void {
+    $job = (object) get_object_vars(horizonJob(0, 'never-retried'));
+    $job->retried_by = false;
+
+    expect((new FailedJobRetryEligibility)->allows($job))->toBeTrue();
+});
+
+it('allows individual retries after prior retries failed and blocks active or successful retries', function (): void {
     Bus::fake();
 
-    $eligible = horizonJob(0, 'eligible');
-    $eligible->retried_by = json_encode([
+    $alreadyRetried = horizonJob(0, 'already-retried');
+    $alreadyRetried->retried_by = json_encode([
         ['id' => 'failed-retry', 'status' => 'failed'],
     ], JSON_THROW_ON_ERROR);
 
@@ -70,7 +77,7 @@ it('blocks retry children and originals with active completed or unknown retry c
     $malformed->retried_by = '{not-json';
 
     $repository = mockDashboardContract(JobRepository::class);
-    dashboardReturnsFor($repository, 'findFailed', ['eligible'], $eligible);
+    dashboardReturnsFor($repository, 'findFailed', ['already-retried'], $alreadyRetried);
     dashboardReturnsFor($repository, 'findFailed', ['never-retried'], $neverRetried);
     dashboardReturnsFor($repository, 'findFailed', ['retry-child'], $retryChild);
     dashboardReturnsFor($repository, 'findFailed', ['completed-retry'], $completed);
@@ -85,23 +92,27 @@ it('blocks retry children and originals with active completed or unknown retry c
         new FailedJobRetryEligibility,
     );
 
-    expect($action->handle('eligible'))->toBeTrue()
+    expect($action->handle('already-retried'))->toBeTrue()
         ->and($action->handle('never-retried'))->toBeTrue()
-        ->and($action->handle('retry-child'))->toBeFalse()
+        ->and($action->handle('retry-child'))->toBeTrue()
         ->and($action->handle('completed-retry'))->toBeFalse()
         ->and($action->handle('pending-retry'))->toBeFalse()
         ->and($action->handle('unknown-retry'))->toBeFalse()
         ->and($action->handle('malformed-retries'))->toBeFalse()
         ->and($action->handle('missing'))->toBeFalse();
 
-    Bus::assertDispatchedTimes(HorizonRetryFailedJob::class, 2);
+    Bus::assertDispatchedTimes(HorizonRetryFailedJob::class, 3);
     Bus::assertDispatched(
         HorizonRetryFailedJob::class,
-        fn (HorizonRetryFailedJob $job): bool => $job->id === 'eligible',
+        fn (HorizonRetryFailedJob $job): bool => $job->id === 'already-retried',
+    );
+    Bus::assertDispatched(
+        HorizonRetryFailedJob::class,
+        fn (HorizonRetryFailedJob $job): bool => $job->id === 'retry-child',
     );
 });
 
-it('walks failed chunks deduplicates ids and skips retry payloads', function (): void {
+it('walks failed chunks deduplicates ids and includes retry leaves', function (): void {
     Bus::fake();
 
     $first = new Collection(array_map(
@@ -131,9 +142,9 @@ it('walks failed chunks deduplicates ids and skips retry payloads', function ():
         new RetryFailedJob(app(Dispatcher::class), $repository, new FailedJobRetryEligibility),
     );
 
-    expect($action->handle())->toBe(50);
-    Bus::assertDispatchedTimes(HorizonRetryFailedJob::class, 50);
-    Bus::assertNotDispatched(
+    expect($action->handle())->toBe(51);
+    Bus::assertDispatchedTimes(HorizonRetryFailedJob::class, 51);
+    Bus::assertDispatched(
         HorizonRetryFailedJob::class,
         fn (HorizonRetryFailedJob $job): bool => $job->id === 'failed-1',
     );
@@ -197,22 +208,19 @@ it('stops retry-all when a full chunk does not advance', function (): void {
     Bus::assertDispatchedTimes(HorizonRetryFailedJob::class, 100);
 });
 
-it('bulk retries an original again only after all known retry children failed', function (): void {
+it('bulk retries the failed leaf instead of branching again from its parent', function (): void {
     Bus::fake();
 
-    $allFailed = horizonJob(0, 'all-failed');
-    $allFailed->retried_by = json_encode([
-        ['id' => 'retry-1', 'status' => 'failed'],
-        ['id' => 'retry-2', 'status' => 'failed'],
+    $parent = horizonJob(0, 'parent');
+    $parent->retried_by = json_encode([
+        ['id' => 'retry-leaf', 'status' => 'failed'],
     ], JSON_THROW_ON_ERROR);
-    $completed = horizonJob(1, 'completed');
-    $completed->retried_by = json_encode([
-        ['id' => 'retry-3', 'status' => 'failed'],
-        ['id' => 'retry-4', 'status' => 'completed'],
-    ], JSON_THROW_ON_ERROR);
+    $retryLeaf = horizonJob(1, 'retry-leaf');
+    $payload = json_decode($retryLeaf->payload, true, flags: JSON_THROW_ON_ERROR);
+    $retryLeaf->payload = json_encode([...$payload, 'retry_of' => 'parent'], JSON_THROW_ON_ERROR);
 
     $repository = mockDashboardContract(JobRepository::class);
-    dashboardReturns($repository, 'getFailed', new Collection([$allFailed, $completed]));
+    dashboardReturns($repository, 'getFailed', new Collection([$parent, $retryLeaf]));
 
     $scheduled = (new RetryAllFailedJobs(
         $repository,
@@ -223,6 +231,6 @@ it('bulk retries an original again only after all known retry children failed', 
     Bus::assertDispatchedTimes(HorizonRetryFailedJob::class, 1);
     Bus::assertDispatched(
         HorizonRetryFailedJob::class,
-        fn (HorizonRetryFailedJob $job): bool => $job->id === 'all-failed',
+        fn (HorizonRetryFailedJob $job): bool => $job->id === 'retry-leaf',
     );
 });

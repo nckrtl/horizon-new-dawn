@@ -81,7 +81,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
 }
 
 const tableCellVariants = cva(
-  "px-6 py-3 align-top whitespace-nowrap min-[1140px]:align-middle [&:has([role=checkbox])]:pr-0",
+  "px-6 py-3 align-top whitespace-nowrap md:align-middle [&:has([role=checkbox])]:pr-0",
   {
     variants: {
       tone: {

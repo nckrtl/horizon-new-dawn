@@ -60,7 +60,7 @@ describe("Inertia search pages", () => {
       <FailedJobsIndex
         horizon={horizon}
         query=""
-        jobs={{ data: [], total: 0, available: true, message: null }}
+        jobs={{ data: [], total: 0, retryable: false, available: true, message: null }}
       />,
     );
 
@@ -104,7 +104,7 @@ describe("Inertia search pages", () => {
       <FailedJobsIndex
         horizon={{ ...horizon, pollInterval: 5_000 }}
         query=""
-        jobs={{ data: [], total: 0, available: true, message: null }}
+        jobs={{ data: [], total: 0, retryable: false, available: true, message: null }}
       />,
     );
 

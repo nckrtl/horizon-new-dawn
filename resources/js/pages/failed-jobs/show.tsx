@@ -2,9 +2,6 @@ import { Head, Link, router } from "@inertiajs/react";
 import {
   BracesIcon,
   CircleAlertIcon,
-  CircleCheckIcon,
-  CircleEllipsisIcon,
-  CircleXIcon,
   DatabaseIcon,
   RotateCcwIcon,
   type LucideIcon,
@@ -36,9 +33,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { show as failedJobShow } from "@/generated/routes/horizon-new-dawn/failed-jobs";
 import { show as batchShow } from "@/generated/routes/horizon-new-dawn/batches";
+import { show as jobShow } from "@/generated/routes/horizon-new-dawn/jobs";
+import { show as queueShow } from "@/generated/routes/horizon-new-dawn/queues";
 import { useActiveTabQuery } from "@/hooks/use-active-tab-query";
 import { usePageRefresh } from "@/hooks/use-dashboard-refresh";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
+import { formatRuntime } from "@/lib/format-duration";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { isInteractiveTarget } from "@/lib/interactive-target";
 import { currentQueryParameter } from "@/lib/url-query";
@@ -71,11 +71,30 @@ function FailedJobShow({ horizon, job }: FailedJobDetailPageProps) {
   const batchUrl = job.batchId
     ? resolveHorizonRoute(batchShow(job.batchId), horizon.baseUrl).url
     : null;
+  const queueUrl = resolveHorizonRoute(
+    queueShow(encodeURIComponent(job.queue)),
+    horizon.baseUrl,
+  ).url;
+  const waitTime =
+    job.pushedAt !== null && job.reservedAt !== null
+      ? Math.max(0, job.reservedAt - job.pushedAt)
+      : null;
   const details: Array<{ label: string; value: React.ReactNode; identifier?: boolean }> = [
     { label: "Status", value: <JobStatus status="failed" /> },
     { label: "ID", value: job.id, identifier: true },
     { label: "Connection", value: job.connection },
-    { label: "Queue", value: job.queue },
+    {
+      label: "Queue",
+      value: (
+        <Link
+          className="text-foreground underline decoration-foreground/40 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary"
+          href={queueUrl}
+          prefetch
+        >
+          {job.queue}
+        </Link>
+      ),
+    },
     { label: "Attempts", value: String(job.attempts) },
     ...(job.batchId && batchUrl
       ? [
@@ -110,8 +129,13 @@ function FailedJobShow({ horizon, job }: FailedJobDetailPageProps) {
           },
         ]
       : []),
-    { label: "Pushed", value: timestamp(job.pushedAt) },
-    { label: "Failed At", value: timestamp(job.failedAt) },
+    { label: "Queued at", value: timestamp(job.pushedAt) },
+    ...(job.reservedAt !== null
+      ? [{ label: "Reserved at", value: timestamp(job.reservedAt) }]
+      : []),
+    ...(waitTime !== null ? [{ label: "Wait time", value: formatRuntime(waitTime) }] : []),
+    { label: "Failed at", value: timestamp(job.failedAt) },
+    ...(job.runtime !== null ? [{ label: "Runtime", value: formatRuntime(job.runtime) }] : []),
   ];
 
   return (
@@ -349,31 +373,31 @@ function RecentRetries({
       </TableHeader>
       <TableBody>
         {retries.map((retry) => {
-          const failedUrl = resolveHorizonRoute(failedJobShow(retry.id), horizonBaseUrl).url;
+          const detailUrl = retryDetailUrl(retry, horizonBaseUrl);
 
           return (
             <TableRow
-              className={retry.status === "failed" ? "cursor-pointer" : undefined}
+              className={detailUrl ? "cursor-pointer" : undefined}
               key={retry.id}
               onClick={(event) => {
-                if (retry.status !== "failed" || isInteractiveTarget(event.target)) {
+                if (!detailUrl || isInteractiveTarget(event.target)) {
                   return;
                 }
 
-                router.visit(failedUrl);
+                router.visit(detailUrl);
               }}
               onMouseEnter={() => {
-                if (retry.status === "failed") {
-                  router.prefetch(failedUrl);
+                if (detailUrl) {
+                  router.prefetch(detailUrl);
                 }
               }}
             >
               <TableCell className="px-6">
                 <RetryStatus status={retry.status} />
               </TableCell>
-              <TableCell className="px-6 font-mono text-xs">
-                {retry.status === "failed" ? (
-                  <Link className="text-foreground hover:underline" href={failedUrl} prefetch>
+              <TableCell className="px-6">
+                {detailUrl ? (
+                  <Link className="text-foreground hover:underline" href={detailUrl} prefetch>
                     {retry.id}
                   </Link>
                 ) : (
@@ -391,26 +415,33 @@ function RecentRetries({
   );
 }
 
+function retryDetailUrl(retry: FailedJobRetry, horizonBaseUrl: string): string | null {
+  if (retry.status === "failed") {
+    return resolveHorizonRoute(failedJobShow(retry.id), horizonBaseUrl).url;
+  }
+
+  if (retry.status === "pending" || retry.status === "reserved") {
+    return resolveHorizonRoute(jobShow({ type: "pending", job: retry.id }), horizonBaseUrl).url;
+  }
+
+  if (retry.status === "completed") {
+    return resolveHorizonRoute(jobShow({ type: "completed", job: retry.id }), horizonBaseUrl).url;
+  }
+
+  return null;
+}
+
 function RetryStatus({ status }: { status: string }) {
   if (status === "completed") {
-    return (
-      <Badge variant="success">
-        <CircleCheckIcon /> Completed
-      </Badge>
-    );
+    return <Badge variant="success">Completed</Badge>;
   }
 
   if (status === "failed") {
-    return (
-      <Badge variant="destructive">
-        <CircleXIcon /> Failed
-      </Badge>
-    );
+    return <Badge variant="destructive">Failed</Badge>;
   }
 
   return (
     <Badge variant="warning">
-      {status === "pending" ? <RotateCcwIcon /> : <CircleEllipsisIcon />}
       {status[0]?.toUpperCase()}
       {status.slice(1)}
     </Badge>

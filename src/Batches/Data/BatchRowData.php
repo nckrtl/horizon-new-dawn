@@ -17,6 +17,7 @@ final class BatchRowData extends Data
         public readonly int $totalJobs,
         public readonly int $pendingJobs,
         public readonly int $failedJobs,
+        public readonly int $failedJobAttempts,
         public readonly int $processedJobs,
         public readonly int $progress,
         public readonly string $status,

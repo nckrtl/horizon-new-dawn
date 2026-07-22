@@ -1,8 +1,9 @@
 import { router } from "@inertiajs/react";
-import { BanIcon, EllipsisIcon, LoaderCircleIcon } from "lucide-react";
+import { BanIcon, LoaderCircleIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ActionMenuTrigger } from "@/components/ui/action-menu-trigger";
 import {
   Dialog,
   DialogClose,
@@ -12,12 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { destroy as cancelPendingJob } from "@/generated/routes/horizon-new-dawn/jobs/pending";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 
@@ -45,19 +41,7 @@ export function PendingJobActionsMenu({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Pending job actions"
-              disabled={working}
-            />
-          }
-        >
-          <EllipsisIcon />
-        </DropdownMenuTrigger>
+        <ActionMenuTrigger available label="Pending job actions" working={working} />
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem variant="destructive" onSelect={() => setDialogOpen(true)}>
             <BanIcon />

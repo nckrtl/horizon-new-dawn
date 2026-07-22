@@ -5,10 +5,12 @@ import { BatchPendingJobsActions } from "@/components/batches/batch-actions";
 import { BatchJobsTabs } from "@/components/batches/batch-jobs-tabs";
 import { ProgressRing } from "@/components/batches/progress-ring";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { show as queueShow } from "@/generated/routes/horizon-new-dawn/queues";
 import { useActiveTabQuery } from "@/hooks/use-active-tab-query";
 import { usePageRefresh } from "@/hooks/use-dashboard-refresh";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
+import { formatRuntime } from "@/lib/format-duration";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { currentQueryParameter } from "@/lib/url-query";
 import type { BatchDetail, BatchDetailPageProps, BatchJobTab } from "@/types/batches";
@@ -94,6 +96,10 @@ function initialJobTab(batch: BatchDetail): BatchJobTab {
     return requestedTab;
   }
 
+  if (batch.jobs.completed.total > 0 && batch.jobs.pending.total === 0) {
+    return "completed";
+  }
+
   if (batch.jobs.failed.total > 0) {
     return "failed";
   }
@@ -109,6 +115,7 @@ function BatchDetails({ batch, horizonBaseUrl }: { batch: BatchDetail; horizonBa
   const queueUrl = batch.queue
     ? resolveHorizonRoute(queueShow(encodeURIComponent(batch.queue)), horizonBaseUrl).url
     : null;
+  const timings = batchTimings(batch);
   const details: Array<{
     label: string;
     value: React.ReactNode;
@@ -129,15 +136,23 @@ function BatchDetails({ batch, horizonBaseUrl }: { batch: BatchDetail; horizonBa
     ...(batch.name ? [{ label: "Name", value: batch.name }] : []),
     ...(batch.connection ? [{ label: "Connection", value: batch.connection }] : []),
     ...(batch.queue && queueUrl ? [{ label: "Queue", value: batch.queue, href: queueUrl }] : []),
-    { label: "Total Jobs", value: numberFormatter.format(batch.totalJobs) },
-    { label: "Pending Jobs", value: numberFormatter.format(batch.jobs.pending.total) },
-    { label: "Failed Attempts", value: numberFormatter.format(batch.failedJobs) },
-    { label: "Created At", value: dateFormatter.format(batch.createdAt * 1000) },
+    { label: "Total jobs", value: numberFormatter.format(batch.totalJobs) },
+    { label: "Pending jobs", value: numberFormatter.format(batch.jobs.pending.total) },
+    { label: "Failed job attempts", value: numberFormatter.format(batch.failedJobAttempts) },
+    { label: "Queued at", value: dateFormatter.format(timings.queuedAt * 1000) },
+    {
+      label: "Wait time",
+      value: timingValue(timings.waitTime, timings.unavailableReason),
+    },
+    {
+      label: "Runtime",
+      value: timingValue(timings.runtime, timings.unavailableReason),
+    },
     ...(batch.finishedAt
-      ? [{ label: "Finished At", value: dateFormatter.format(batch.finishedAt * 1000) }]
+      ? [{ label: "Finished at", value: dateFormatter.format(batch.finishedAt * 1000) }]
       : []),
     ...(batch.cancelledAt
-      ? [{ label: "Cancelled At", value: dateFormatter.format(batch.cancelledAt * 1000) }]
+      ? [{ label: "Cancelled at", value: dateFormatter.format(batch.cancelledAt * 1000) }]
       : []),
   ];
 
@@ -167,6 +182,75 @@ function BatchDetails({ batch, horizonBaseUrl }: { batch: BatchDetail; horizonBa
         </div>
       ))}
     </dl>
+  );
+}
+
+function batchTimings(batch: BatchDetail): {
+  queuedAt: number;
+  waitTime: number | null;
+  runtime: number | null;
+  unavailableReason: string | null;
+} {
+  const jobLists = Object.values(batch.jobs);
+
+  if (jobLists.some((jobList) => !jobList.complete)) {
+    return {
+      queuedAt: batch.createdAt,
+      waitTime: null,
+      runtime: null,
+      unavailableReason: "Some job history was trimmed, so this value can't be calculated.",
+    };
+  }
+
+  const rows = jobLists.flatMap((jobList) => jobList.rows);
+  const pushedAt = rows.flatMap((job) => (job.pushedAt === null ? [] : [job.pushedAt]));
+  const reservedAt = rows.flatMap((job) => (job.reservedAt === null ? [] : [job.reservedAt]));
+  const queuedAt = pushedAt.length > 0 ? Math.min(...pushedAt) : batch.createdAt;
+  const startedAt = reservedAt.length > 0 ? Math.min(...reservedAt) : null;
+
+  if (startedAt === null) {
+    return {
+      queuedAt,
+      waitTime: null,
+      runtime: null,
+      unavailableReason: "No batch job has started processing yet.",
+    };
+  }
+
+  const finishedAt = batch.finishedAt ?? batch.cancelledAt ?? Date.now() / 1000;
+
+  return {
+    queuedAt,
+    waitTime: Math.max(0, startedAt - queuedAt),
+    runtime: Math.max(0, finishedAt - startedAt),
+    unavailableReason: null,
+  };
+}
+
+function timingValue(value: number | null, unavailableReason: string | null): React.ReactNode {
+  if (value !== null) {
+    return formatRuntime(value);
+  }
+
+  if (unavailableReason === null) {
+    return "—";
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className="inline-flex cursor-help rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`Unavailable. ${unavailableReason}`}
+            tabIndex={0}
+          >
+            —
+          </span>
+        }
+      />
+      <TooltipContent>{unavailableReason}</TooltipContent>
+    </Tooltip>
   );
 }
 

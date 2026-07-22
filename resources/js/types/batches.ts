@@ -3,6 +3,11 @@ import type { JobRow } from "@/types/jobs";
 
 export type BatchStatus = "pending" | "failures" | "finished" | "cancelled";
 export type BatchCreatedRange = "hour" | "day" | "week" | "month";
+export type BatchClearScope = "incomplete" | "complete" | "finished" | "cancelled";
+
+export type BatchClearCounts = Record<BatchClearScope, number> & {
+  available: boolean;
+};
 
 export type BatchFilterValues = {
   queue: string | null;
@@ -19,6 +24,7 @@ export type BatchRow = {
   totalJobs: number;
   pendingJobs: number;
   failedJobs: number;
+  failedJobAttempts: number;
   processedJobs: number;
   progress: number;
   status: BatchStatus;
@@ -53,7 +59,7 @@ export type BatchesPageProps = {
   horizon: BatchesHorizon;
   query: string;
   filters?: BatchFilterValues;
-  finishedBatches?: number;
+  batchClearCounts?: BatchClearCounts;
   batches: {
     data: BatchRow[];
     available: boolean;

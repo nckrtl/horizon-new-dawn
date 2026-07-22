@@ -32,6 +32,7 @@ final class FailedJobController
                 [
                     'data' => $page->items,
                     'total' => $page->total,
+                    'retryable' => $jobs->hasRetryable(),
                     'available' => $page->available,
                     'message' => $page->message,
                 ],

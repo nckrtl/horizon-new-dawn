@@ -221,7 +221,12 @@ it('discovers supervised queues and aggregates duplicate names across connection
         ],
         'message' => null,
     ])->and($catalog->find('reports')?->name)->toBe('reports')
-        ->and($catalog->find('missing'))->toBeNull();
+        ->and($catalog->find('missing'))->toBeNull()
+        ->and($catalog->pendingCounts()->toArray())->toBe([
+            'available' => true,
+            'ready' => 23,
+            'delayed' => 11,
+        ]);
 });
 
 it('returns a safe unavailable queue catalog when Horizon storage fails', function (): void {
@@ -241,6 +246,10 @@ it('returns a safe unavailable queue catalog when Horizon storage fails', functi
         'available' => false,
         'queues' => [],
         'message' => 'Horizon queues are currently unavailable.',
+    ])->and($catalog->pendingCounts()->toArray())->toBe([
+        'available' => false,
+        'ready' => null,
+        'delayed' => null,
     ]);
 });
 

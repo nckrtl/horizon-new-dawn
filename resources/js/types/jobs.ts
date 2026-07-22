@@ -12,6 +12,7 @@ export type JobRow = {
   status: string;
   tags: string[];
   attempts: number;
+  attemptsComplete?: boolean;
   retryOf: string | null;
   delay: number | null;
   pushedAt: number | null;
@@ -43,6 +44,7 @@ export type JobDetail = Omit<
   | "retryCount"
   | "latestRetryStatus"
   | "retryEligible"
+  | "attemptsComplete"
 > & {
   delayedUntil: number | null;
   batchId: string | null;
@@ -66,7 +68,9 @@ export type FailedJobDetail = Omit<JobDetail, "completedAt"> & {
 export type FailedJobsPageProps = {
   horizon: JobsPageProps["horizon"];
   query: string;
-  jobs: JobCollection;
+  jobs: JobCollection & {
+    retryable: boolean;
+  };
 };
 
 export type FailedJobDetailPageProps = {
@@ -81,6 +85,11 @@ export type JobsPageProps = {
     status: HorizonStatus;
   };
   type: JobListType;
+  pendingCounts: {
+    available: boolean;
+    ready: number | null;
+    delayed: number | null;
+  } | null;
   jobs: JobCollection;
 };
 

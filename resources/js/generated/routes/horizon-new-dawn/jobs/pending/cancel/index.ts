@@ -1,7 +1,7 @@
 import { queryParams, type RouteQueryOptions, type RouteDefinition, applyUrlDefaults } from './../../../../../wayfinder'
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\PendingJobsCancellationController::destroy
-* @see src/Http/Controllers/PendingJobsCancellationController.php:15
+* @see src/Http/Controllers/PendingJobsCancellationController.php:16
 * @route '/horizon/jobs/pending/cancel/{scope}'
 */
 export const destroy = (args: { scope: string | number } | [scope: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
@@ -16,7 +16,7 @@ destroy.definition = {
 
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\PendingJobsCancellationController::destroy
-* @see src/Http/Controllers/PendingJobsCancellationController.php:15
+* @see src/Http/Controllers/PendingJobsCancellationController.php:16
 * @route '/horizon/jobs/pending/cancel/{scope}'
 */
 destroy.url = (args: { scope: string | number } | [scope: string | number ] | string | number, options?: RouteQueryOptions) => {
@@ -43,7 +43,7 @@ destroy.url = (args: { scope: string | number } | [scope: string | number ] | st
 
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\PendingJobsCancellationController::destroy
-* @see src/Http/Controllers/PendingJobsCancellationController.php:15
+* @see src/Http/Controllers/PendingJobsCancellationController.php:16
 * @route '/horizon/jobs/pending/cancel/{scope}'
 */
 destroy.delete = (args: { scope: string | number } | [scope: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({

@@ -1,8 +1,9 @@
 import { router } from "@inertiajs/react";
-import { EllipsisIcon, LoaderCircleIcon, RotateCcwIcon } from "lucide-react";
+import { LoaderCircleIcon, RotateCcwIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ActionMenuTrigger } from "@/components/ui/action-menu-trigger";
 import {
   Dialog,
   DialogClose,
@@ -12,12 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { store as retryQueueBatches } from "@/generated/routes/horizon-new-dawn/queues/batches/retry-failed";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 
@@ -51,19 +47,11 @@ export function QueueBatchesActions({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Batch jobs actions for ${queue}`}
-              disabled={working}
-            />
-          }
-        >
-          <EllipsisIcon />
-        </DropdownMenuTrigger>
+        <ActionMenuTrigger
+          available={failedJobs > 0}
+          label={`Batch jobs actions for ${queue}`}
+          working={working}
+        />
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuItem disabled={failedJobs === 0} onSelect={() => setDialogOpen(true)}>
             <RotateCcwIcon className="size-3.5" />

@@ -9,12 +9,13 @@ use Inertia\Inertia;
 use Inertia\Response;
 use NckRtl\HorizonNewDawn\Jobs\JobListType;
 use NckRtl\HorizonNewDawn\Jobs\JobsData;
+use NckRtl\HorizonNewDawn\Queues\QueuesData;
 use NckRtl\HorizonNewDawn\Support\Data\PageMetaData;
 use NckRtl\HorizonNewDawn\Support\Scrolling\HorizonScrollMetadata;
 
 final class JobController
 {
-    public function index(Request $request, JobsData $jobs, string $type): Response
+    public function index(Request $request, JobsData $jobs, QueuesData $queues, string $type): Response
     {
         $jobType = JobListType::from($type);
         $page = $jobs->page($jobType, $request->integer('starting_at', -1));
@@ -22,6 +23,9 @@ final class JobController
         return Inertia::render('Jobs/Index', [
             'meta' => new PageMetaData($jobType->title(), $jobType->navigation()),
             'type' => $jobType->value,
+            'pendingCounts' => $jobType === JobListType::Pending
+                ? $queues->all()->pendingCounts()
+                : null,
             'jobs' => Inertia::scroll(
                 [
                     'data' => $page->items,

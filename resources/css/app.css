@@ -33,6 +33,8 @@
   --color-status-delayed-foreground: var(--status-delayed-foreground);
   --color-status-processing: var(--status-processing);
   --color-status-processing-foreground: var(--status-processing-foreground);
+  --color-status-retry: var(--status-retry);
+  --color-status-retry-foreground: var(--status-retry-foreground);
   --color-status-paused: var(--status-paused);
   --color-status-paused-foreground: var(--status-paused-foreground);
   --color-status-inactive: var(--status-inactive);
@@ -166,6 +168,8 @@
   --status-delayed-foreground: var(--warn);
   --status-processing: #dbeafe;
   --status-processing-foreground: #1d4ed8;
+  --status-retry: var(--color-pink-100);
+  --status-retry-foreground: var(--color-pink-700);
   --status-paused: #ffedd5;
   --status-paused-foreground: #9a3412;
   --status-inactive: #3f3f46;
@@ -243,15 +247,17 @@
   --status-delayed-foreground: var(--warn);
   --status-processing: color-mix(in oklab, var(--color-blue-900) 70%, var(--card) 30%);
   --status-processing-foreground: var(--color-blue-400);
+  --status-retry: color-mix(in oklab, var(--color-pink-800) 70%, var(--card) 30%);
+  --status-retry-foreground: var(--color-pink-300);
   --status-paused: color-mix(in oklab, var(--color-orange-900) 70%, var(--card) 30%);
   --status-paused-foreground: var(--color-orange-400);
   --status-inactive: color-mix(in oklab, var(--background) 60%, var(--foreground) 40%);
-  --status-unavailable: color-mix(in oklab, var(--color-red-900) 70%, var(--card) 30%);
-  --status-unavailable-foreground: var(--destructive);
+  --status-unavailable: color-mix(in oklab, var(--color-red-800) 70%, var(--card) 30%);
+  --status-unavailable-foreground: var(--color-red-300);
   --status-success-icon: var(--status-running-foreground);
   --status-warning-icon: var(--status-delayed-foreground);
   --status-processing-icon: var(--status-processing-foreground);
-  --status-destructive-icon: var(--status-unavailable-foreground);
+  --status-destructive-icon: var(--color-red-400);
   --status-idle: var(--primary);
   --status-idle-track: color-mix(in oklab, var(--background) 80%, var(--foreground) 20%);
   --status-working: var(--primary);

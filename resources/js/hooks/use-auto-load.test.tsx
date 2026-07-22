@@ -8,10 +8,12 @@ const inertia = vi.hoisted(() => ({
   start: vi.fn(),
   stop: vi.fn(),
   usePoll: vi.fn(),
+  scrollProps: {} as Record<string, unknown>,
 }));
 
 vi.mock("@inertiajs/react", () => ({
   usePoll: inertia.usePoll,
+  usePage: () => ({ scrollProps: inertia.scrollProps }),
 }));
 
 describe("useAutoLoad", () => {
@@ -20,6 +22,7 @@ describe("useAutoLoad", () => {
     inertia.stop.mockReset();
     inertia.usePoll.mockReset();
     inertia.usePoll.mockReturnValue({ start: inertia.start, stop: inertia.stop });
+    inertia.scrollProps = {};
     window.history.replaceState({}, "", "/horizon/failed?starting_at=49&tag=tenant%3A42");
   });
 
@@ -90,6 +93,91 @@ describe("useAutoLoad", () => {
     expect(result.current).toMatchObject({
       items: refreshed,
       hasNewEntries: false,
+    });
+  });
+
+  it("keeps the loaded tail mounted when polling resets the first page", () => {
+    inertia.scrollProps = {
+      jobs: {
+        pageName: "starting_at",
+        previousPage: null,
+        nextPage: 49,
+        currentPage: -1,
+        reset: true,
+      },
+    };
+    const original = [
+      { id: "job-4", status: "pending" },
+      { id: "job-3", status: "pending" },
+      { id: "job-2", status: "pending" },
+      { id: "job-1", status: "pending" },
+    ];
+    const refreshed = [
+      { id: "job-5", status: "pending" },
+      { id: "job-4", status: "reserved" },
+    ];
+    const { result, rerender } = renderHook(
+      ({ items }) =>
+        useAutoLoad({
+          enabled: true,
+          prop: "jobs",
+          interval: 1_000,
+          items,
+        }),
+      { initialProps: { items: original } },
+    );
+
+    rerender({ items: refreshed });
+
+    expect(result.current.items).toEqual([
+      { id: "job-5", status: "pending" },
+      { id: "job-4", status: "reserved" },
+      { id: "job-3", status: "pending" },
+      { id: "job-2", status: "pending" },
+    ]);
+  });
+
+  it("holds a new reset prefix without shrinking the loaded tail", () => {
+    inertia.scrollProps = {
+      jobs: {
+        pageName: "starting_at",
+        previousPage: null,
+        nextPage: 49,
+        currentPage: -1,
+        reset: true,
+      },
+    };
+    const original = [
+      { id: "job-4", status: "pending" },
+      { id: "job-3", status: "pending" },
+      { id: "job-2", status: "pending" },
+      { id: "job-1", status: "pending" },
+    ];
+    const refreshed = [
+      { id: "job-5", status: "pending" },
+      { id: "job-4", status: "reserved" },
+    ];
+    const { result, rerender } = renderHook(
+      ({ items }) =>
+        useAutoLoad({
+          enabled: false,
+          prop: "jobs",
+          interval: 1_000,
+          items,
+        }),
+      { initialProps: { items: original } },
+    );
+
+    rerender({ items: refreshed });
+
+    expect(result.current).toMatchObject({
+      items: [
+        { id: "job-4", status: "reserved" },
+        { id: "job-3", status: "pending" },
+        { id: "job-2", status: "pending" },
+        { id: "job-1", status: "pending" },
+      ],
+      hasNewEntries: true,
     });
   });
 

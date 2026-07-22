@@ -130,6 +130,7 @@ final readonly class BatchesData
                 totalJobs: $row->totalJobs,
                 pendingJobs: $row->pendingJobs,
                 failedJobs: $row->failedJobs,
+                failedJobAttempts: $row->failedJobAttempts,
                 processedJobs: $row->processedJobs,
                 progress: $row->progress,
                 status: $row->status,
@@ -145,29 +146,12 @@ final readonly class BatchesData
         }
     }
 
-    public function finishedCount(): int
-    {
-        try {
-            $database = config('queue.batching.database');
-            $table = config('queue.batching.table', 'job_batches');
-
-            return $this->database
-                ->connection(is_string($database) ? $database : null)
-                ->table(is_string($table) ? $table : 'job_batches')
-                ->whereNotNull('finished_at')
-                ->orWhereNotNull('cancelled_at')
-                ->count();
-        } catch (Throwable $exception) {
-            report($exception);
-
-            return 0;
-        }
-    }
-
     public function row(Batch $batch): BatchRowData
     {
         $name = trim($batch->name);
         $processedJobs = $batch->processedJobs();
+        $failedJobs = min(max(0, $batch->pendingJobs), max(0, $batch->failedJobs));
+        $pendingJobs = max(0, $batch->pendingJobs - $failedJobs);
         $attribution = $this->attribution($batch);
         $status = match (true) {
             $batch->cancelled() => 'cancelled',
@@ -183,8 +167,9 @@ final readonly class BatchesData
             connection: $attribution['connection'],
             queue: $attribution['queue'],
             totalJobs: $batch->totalJobs,
-            pendingJobs: $batch->pendingJobs,
-            failedJobs: $batch->failedJobs,
+            pendingJobs: $pendingJobs,
+            failedJobs: $failedJobs,
+            failedJobAttempts: max(0, $batch->failedJobs),
             processedJobs: $processedJobs,
             progress: (int) $batch->progress(),
             status: $status,

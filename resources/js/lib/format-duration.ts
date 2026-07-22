@@ -37,3 +37,7 @@ export function formatDuration(seconds: number) {
 export function lowercaseFirst(value: string) {
   return `${value.charAt(0).toLowerCase()}${value.slice(1)}`;
 }
+
+export function formatRuntime(seconds: number) {
+  return `${Math.max(0, seconds).toFixed(2)}s`;
+}

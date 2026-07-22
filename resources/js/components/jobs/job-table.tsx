@@ -1,10 +1,11 @@
-import { router } from "@inertiajs/react";
+import { Link, router } from "@inertiajs/react";
 import { TriangleAlertIcon } from "lucide-react";
 
 import { SortableTableHead } from "@/components/data-table/sortable-table-head";
 import { NewEntriesTableRow, TableNoticeRow } from "@/components/data-table/new-entries-alert";
 import { TableEmpty } from "@/components/data-table/table-empty";
 import { JobTablePrimaryCell } from "@/components/jobs/job-table-primary-cell";
+import { PendingJobActionsMenu } from "@/components/jobs/pending-job-actions";
 import {
   CompletedJobsNavigationIcon,
   PendingJobsNavigationIcon,
@@ -12,8 +13,16 @@ import {
 } from "@/components/navigation-icons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { show as failedJobShow } from "@/generated/routes/horizon-new-dawn/failed-jobs";
 import { show as jobShow } from "@/generated/routes/horizon-new-dawn/jobs";
 import { useSortableRows, type SortColumn } from "@/hooks/use-sortable-rows";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
@@ -168,18 +177,19 @@ export function JobTable({
               className="w-[110px] px-6 text-right"
             />
           ) : null}
+          {compact ? <TableHead className="w-[72px] px-6 text-right">Actions</TableHead> : null}
         </TableRow>
       </TableHeader>
       <TableBody>
         {hasNewEntries && onLoadNewEntries ? (
-          <NewEntriesTableRow columns={compact ? 3 : 4} onLoad={onLoadNewEntries} />
+          <NewEntriesTableRow columns={4} onLoad={onLoadNewEntries} />
         ) : null}
         {notice && sorted.rows.length > 0 ? (
-          <TableNoticeRow columns={compact ? 3 : 4}>{notice}</TableNoticeRow>
+          <TableNoticeRow columns={4}>{notice}</TableNoticeRow>
         ) : null}
         {sorted.rows.length === 0 ? (
           <TableEmpty
-            columns={compact ? 3 : 4}
+            columns={4}
             title={emptyTitle ?? `No ${type} jobs`}
             description={emptyDescription ?? `Horizon is not reporting any ${type} jobs.`}
             icon={emptyStateIcons[type]}
@@ -187,6 +197,9 @@ export function JobTable({
         ) : null}
         {sorted.rows.map((job) => {
           const detailUrl = resolveHorizonRoute(jobShow({ type, job: job.id }), horizonBaseUrl).url;
+          const retryOfUrl = job.retryOf
+            ? resolveHorizonRoute(failedJobShow(job.retryOf), horizonBaseUrl).url
+            : null;
           const state = pendingState(job);
           const pendingStateDetails = pendingStates[state];
 
@@ -210,6 +223,17 @@ export function JobTable({
                 tags={job.tags}
                 href={detailUrl}
                 tagLimit={3}
+                accessory={job.retryOf ? <Badge variant="retry">Retry</Badge> : undefined}
+                details={
+                  retryOfUrl ? (
+                    <span>
+                      Retry of{" "}
+                      <Link className="text-foreground hover:underline" href={retryOfUrl} prefetch>
+                        {job.retryOf}
+                      </Link>
+                    </span>
+                  ) : undefined
+                }
               />
               {compact ? (
                 <TableCell className="px-6">
@@ -226,6 +250,13 @@ export function JobTable({
               <TableCell className={cn("px-6 text-muted-foreground", compact && "text-right")}>
                 {formatTimestamp(job.pushedAt)}
               </TableCell>
+              {compact ? (
+                <TableCell className="px-6 text-right">
+                  {state !== "reserved" ? (
+                    <PendingJobActionsMenu jobId={job.id} horizonBaseUrl={horizonBaseUrl} />
+                  ) : null}
+                </TableCell>
+              ) : null}
               {!compact ? (
                 <TableCell className="px-6 text-muted-foreground">
                   {formatTimestamp(job.completedAt)}

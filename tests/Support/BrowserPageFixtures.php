@@ -68,12 +68,36 @@ function bindBrowserPageFixtures(): void
     $failed->completed_at = null;
     $failed->failed_at = '1784281003.50';
 
+    $batchFailedParent = horizonJob(5, 'batch-failed-parent');
+    $batchFailedParent->status = 'failed';
+    $batchFailedParent->completed_at = null;
+    $batchFailedParent->failed_at = '1784281004.50';
+    $batchParentPayload = json_decode($batchFailedParent->payload, true, flags: JSON_THROW_ON_ERROR);
+    $batchParentPayload['attempts'] = 1;
+    $batchParentPayload['data']['batchId'] = 'batch-1';
+    $batchFailedParent->payload = json_encode($batchParentPayload, JSON_THROW_ON_ERROR);
+    $batchFailedParent->retried_by = json_encode([
+        ['id' => 'batch-failed-retry', 'status' => 'failed'],
+    ], JSON_THROW_ON_ERROR);
+
+    $batchFailedRetry = horizonJob(6, 'batch-failed-retry');
+    $batchFailedRetry->status = 'failed';
+    $batchFailedRetry->completed_at = null;
+    $batchFailedRetry->failed_at = '1784281005.50';
+    $batchRetryPayload = json_decode($batchFailedRetry->payload, true, flags: JSON_THROW_ON_ERROR);
+    $batchRetryPayload['attempts'] = 2;
+    $batchRetryPayload['retry_of'] = 'batch-failed-parent';
+    $batchRetryPayload['data']['batchId'] = 'batch-1';
+    $batchFailedRetry->payload = json_encode($batchRetryPayload, JSON_THROW_ON_ERROR);
+
     $jobsById = [
         $pending->id => $pending,
         $completed->id => $completed,
         $silenced->id => $silenced,
         $recent->id => $recent,
         $failed->id => $failed,
+        $batchFailedParent->id => $batchFailedParent,
+        $batchFailedRetry->id => $batchFailedRetry,
     ];
 
     $jobs = mockDashboardContract(JobRepository::class);
@@ -86,11 +110,11 @@ function bindBrowserPageFixtures(): void
     );
     dashboardReturns($jobs, 'getPending', new Collection);
     dashboardReturns($jobs, 'getCompleted', new Collection);
-    dashboardReturns($jobs, 'getFailed', new Collection);
+    dashboardReturns($jobs, 'getFailed', new Collection([$failed]));
     dashboardReturns($jobs, 'getSilenced', new Collection([$silenced]));
     dashboardReturns($jobs, 'countPending', 0);
     dashboardReturns($jobs, 'countCompleted', 0);
-    dashboardReturns($jobs, 'countFailed', 0);
+    dashboardReturns($jobs, 'countFailed', 1);
     dashboardReturns($jobs, 'countSilenced', 1);
     app()->instance(JobRepository::class, $jobs);
 
@@ -141,8 +165,10 @@ function bindBrowserPageFixtures(): void
     $batch = horizonBatch(
         'batch-1',
         name: 'Import customer records',
-        totalJobs: 0,
-        pendingJobs: 0,
+        totalJobs: 1,
+        pendingJobs: 1,
+        failedJobs: 2,
+        failedJobIds: ['batch-failed-parent', 'batch-failed-retry'],
     );
     $batchRepository = mockDashboardContract(BatchRepository::class);
     dashboardReturns($batchRepository, 'find', $batch);
@@ -199,9 +225,9 @@ function bindBrowserPageFixtures(): void
     ));
 
     $queue = mockDashboardContract(Queue::class);
-    dashboardReturns($queue, 'readyNow', 0);
+    dashboardReturns($queue, 'readyNow', 1);
     dashboardReturns($queue, 'reservedSize', 0);
-    dashboardReturns($queue, 'delayedSize', 0);
+    dashboardReturns($queue, 'delayedSize', 1);
     dashboardReturns($queue, 'creationTimeOfOldestPendingJob', null);
     $queueFactory = mockDashboardContract(QueueFactory::class);
     dashboardReturns($queueFactory, 'connection', $queue);
@@ -246,6 +272,66 @@ function bindBrowserPageFixtures(): void
             return true;
         }
     });
+}
+
+function bindBrowserInfiniteScrollRefreshFixtures(): void
+{
+    bindBrowserPageFixtures();
+    config()->set('horizon-new-dawn.poll_interval', 2000);
+
+    $failedJob = static function (int $index): HorizonJob {
+        $job = horizonJob($index, "failed-{$index}");
+        $job->status = 'failed';
+        $job->completed_at = null;
+        $job->failed_at = (string) (1784281003.5 + $index);
+
+        return $job;
+    };
+    $initialFirstPage = array_map($failedJob, range(100, 51));
+    $secondPage = array_map($failedJob, range(50, 1));
+    $newJob = $failedJob(101);
+    $updatedJob = clone $initialFirstPage[0];
+    $updatedJob->name = 'App\\Jobs\\RefreshedImportFeed';
+    $refreshedFirstPage = [$newJob, $updatedJob, ...array_slice($initialFirstPage, 1, 48)];
+    $firstPageRequests = 0;
+
+    $jobs = mockDashboardContract(JobRepository::class);
+    dashboardReturnsUsing(
+        $jobs,
+        'getFailed',
+        static function (string $startingAt) use (
+            &$firstPageRequests,
+            $initialFirstPage,
+            $refreshedFirstPage,
+            $secondPage,
+        ): Collection {
+            if ($startingAt !== '-1') {
+                return new Collection($secondPage);
+            }
+
+            $firstPageRequests++;
+
+            return new Collection($firstPageRequests <= 3 ? $initialFirstPage : $refreshedFirstPage);
+        },
+    );
+    dashboardReturns($jobs, 'getJobs', new Collection);
+    dashboardReturns($jobs, 'getPending', new Collection);
+    dashboardReturns($jobs, 'getCompleted', new Collection);
+    dashboardReturns($jobs, 'getSilenced', new Collection);
+    dashboardReturns($jobs, 'countPending', 0);
+    dashboardReturns($jobs, 'countCompleted', 0);
+    dashboardReturns($jobs, 'countFailed', 101);
+    dashboardReturns($jobs, 'countSilenced', 0);
+    app()->instance(JobRepository::class, $jobs);
+
+    $jobData = new JobsData($jobs);
+    app()->instance(JobsData::class, $jobData);
+    app()->instance(FailedJobsData::class, new FailedJobsData(
+        $jobs,
+        app(TagRepository::class),
+        $jobData,
+        new FailedJobRetryEligibility,
+    ));
 }
 
 final class BrowserPendingJobQueueManager extends QueueManager

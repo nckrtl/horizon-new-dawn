@@ -58,6 +58,7 @@ const props: BatchDetailPageProps = {
     totalJobs: 5,
     pendingJobs: 2,
     failedJobs: 1,
+    failedJobAttempts: 4,
     processedJobs: 3,
     progress: 60,
     status: "failures",
@@ -98,10 +99,11 @@ describe("BatchShow", () => {
   it("matches the handoff's compact batch detail rows", () => {
     render(<BatchShow {...props} />);
 
-    expect(screen.getByText("Total Jobs")).toBeVisible();
-    expect(screen.getByText("Pending Jobs")).toBeVisible();
-    expect(screen.getByText("Failed Attempts")).toBeVisible();
-    expect(screen.queryByText("Processed Jobs")).not.toBeInTheDocument();
+    expect(screen.getByText("Total jobs")).toBeVisible();
+    expect(screen.getByText("Pending jobs")).toBeVisible();
+    expect(screen.getByText("Failed job attempts")).toBeVisible();
+    expect(screen.getByText("Failed job attempts").parentElement).toHaveTextContent("4");
+    expect(screen.queryByText("Processed jobs")).not.toBeInTheDocument();
   });
 
   it("switches contextual job headers and scopes actions to the failed tab", () => {

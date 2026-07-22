@@ -182,7 +182,7 @@ describe('BatchJobsData', function (): void {
         $batch = horizonBatch(
             'batch-42',
             totalJobs: 1,
-            pendingJobs: 0,
+            pendingJobs: 1,
             failedJobs: 1,
             failedJobIds: ['failed-1'],
         );
@@ -194,6 +194,77 @@ describe('BatchJobsData', function (): void {
             ->and($failed->complete)->toBeFalse()
             ->and($failed->rows)->toBe([])
             ->and($failed->message)->toBe('Some failed jobs are no longer retained by Horizon.');
+    });
+
+    it('collapses retained retry chains into logical failed jobs and totals their attempts', function (): void {
+        $batch = horizonBatch(
+            'batch-42',
+            totalJobs: 4,
+            pendingJobs: 2,
+            failedJobs: 4,
+            failedJobIds: ['original-1', 'retry-1', 'retry-2', 'trimmed-lineage'],
+        );
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturnsFor($repository, 'getJobs', [$batch->failedJobIds], collect([
+            retainedBatchRetry(0, 'original-1', null, 2, 'retry-1'),
+            retainedBatchRetry(1, 'retry-1', 'original-1', 1, 'retry-2'),
+            retainedBatchRetry(2, 'retry-2', 'retry-1', 3),
+        ]));
+
+        $failed = (new BatchJobsData($repository, new JobsData($repository)))->forBatch($batch)->failed;
+
+        expect($failed->total)->toBe(2)
+            ->and($failed->rows)->toHaveCount(1)
+            ->and($failed->rows[0]->id)->toBe('retry-2')
+            ->and($failed->rows[0]->attempts)->toBe(6)
+            ->and($failed->rows[0]->attemptsComplete)->toBeTrue()
+            ->and($failed->complete)->toBeFalse()
+            ->and($failed->message)->toBe('Some failed jobs are no longer retained by Horizon.');
+    });
+
+    it('reports a lower-bound attempt total when the start of a retry chain was trimmed', function (): void {
+        $batch = horizonBatch(
+            'batch-42',
+            totalJobs: 1,
+            pendingJobs: 1,
+            failedJobs: 2,
+            failedJobIds: ['trimmed-parent', 'retry-1'],
+        );
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturnsFor($repository, 'getJobs', [$batch->failedJobIds], collect([
+            retainedBatchRetry(1, 'retry-1', 'trimmed-parent', 2),
+        ]));
+
+        $failed = (new BatchJobsData($repository, new JobsData($repository)))->forBatch($batch)->failed;
+
+        expect($failed->total)->toBe(1)
+            ->and($failed->rows)->toHaveCount(1)
+            ->and($failed->rows[0]->attempts)->toBe(3)
+            ->and($failed->rows[0]->attemptsComplete)->toBeFalse()
+            ->and($failed->complete)->toBeFalse();
+    });
+
+    it('does not count a queued retry as an unknown execution attempt', function (): void {
+        $batch = horizonBatch(
+            'batch-42',
+            totalJobs: 1,
+            pendingJobs: 1,
+            failedJobs: 1,
+            failedJobIds: ['original-1'],
+        );
+        $original = retainedBatchRetry(0, 'original-1', null, 2);
+        $original->retried_by = json_encode([
+            ['id' => 'pending-retry', 'status' => 'pending'],
+        ], JSON_THROW_ON_ERROR);
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturnsFor($repository, 'getJobs', [$batch->failedJobIds], collect([$original]));
+
+        $failed = (new BatchJobsData($repository, new JobsData($repository)))->forBatch($batch)->failed;
+
+        expect($failed->rows)->toHaveCount(1)
+            ->and($failed->rows[0]->attempts)->toBe(2)
+            ->and($failed->rows[0]->attemptsComplete)->toBeTrue()
+            ->and($failed->complete)->toBeTrue();
     });
 });
 
@@ -217,6 +288,31 @@ function retainedBatchJob(
         $job->completed_at = null;
         $job->failed_at = '1784281004.25';
     }
+
+    return $job;
+}
+
+function retainedBatchRetry(
+    int $index,
+    string $id,
+    ?string $retryOf,
+    int $attempts,
+    ?string $retriedBy = null,
+): HorizonJob {
+    $job = retainedBatchJob($index, $id, 'batch-42', 'failed');
+    $payload = json_decode($job->payload, true, flags: JSON_THROW_ON_ERROR);
+    $payload['attempts'] = $attempts;
+
+    if ($retryOf !== null) {
+        $payload['retry_of'] = $retryOf;
+    }
+
+    $job->payload = json_encode($payload, JSON_THROW_ON_ERROR);
+    $job->retried_by = $retriedBy === null
+        ? null
+        : json_encode([
+            ['id' => $retriedBy, 'status' => 'failed'],
+        ], JSON_THROW_ON_ERROR);
 
     return $job;
 }

@@ -1,4 +1,4 @@
-import { usePoll } from "@inertiajs/react";
+import { usePage, usePoll } from "@inertiajs/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type AutoLoadItem = {
@@ -7,6 +7,32 @@ type AutoLoadItem = {
 
 const emptyItems: readonly never[] = [];
 const emptyProps: readonly string[] = [];
+
+function reconcileResetItems<T extends AutoLoadItem>(
+  current: readonly T[],
+  incoming: readonly T[],
+  hasNextPage: boolean,
+): readonly T[] {
+  if (
+    !hasNextPage ||
+    current.length === 0 ||
+    incoming.length === 0 ||
+    incoming.length > current.length
+  ) {
+    return incoming;
+  }
+
+  const incomingIds = new Set(incoming.map((item) => item.id));
+
+  if (!current.some((item) => incomingIds.has(item.id))) {
+    return incoming;
+  }
+
+  return [...incoming, ...current.filter((item) => !incomingIds.has(item.id))].slice(
+    0,
+    current.length,
+  );
+}
 
 export function useAutoLoad<T extends AutoLoadItem = AutoLoadItem>({
   enabled,
@@ -27,6 +53,9 @@ export function useAutoLoad<T extends AutoLoadItem = AutoLoadItem>({
   scope?: string;
   polling?: boolean;
 }) {
+  const scrollProp = usePage().scrollProps?.[prop];
+  const isReset = scrollProp?.reset === true;
+  const hasNextPage = scrollProp?.nextPage !== null && scrollProp?.nextPage !== undefined;
   const latestItems = useRef(items);
   const visibleItemsRef = useRef(items);
   const scopeRef = useRef(scope);
@@ -34,47 +63,56 @@ export function useAutoLoad<T extends AutoLoadItem = AutoLoadItem>({
   const [hasNewEntries, setHasNewEntries] = useState(false);
 
   useEffect(() => {
-    latestItems.current = items;
-
     if (scopeRef.current !== scope) {
       scopeRef.current = scope;
+      latestItems.current = items;
       visibleItemsRef.current = items;
       setVisibleItems(items);
       setHasNewEntries(false);
 
       return;
     }
+
+    const currentItems = visibleItemsRef.current;
+    const refreshedItems = isReset ? reconcileResetItems(currentItems, items, hasNextPage) : items;
+
+    latestItems.current = refreshedItems;
 
     if (enabled) {
-      visibleItemsRef.current = items;
-      setVisibleItems(items);
+      visibleItemsRef.current = refreshedItems;
+      setVisibleItems(refreshedItems);
       setHasNewEntries(false);
 
       return;
     }
 
-    const visibleIds = new Set(visibleItemsRef.current.map((item) => item.id));
+    const visibleIds = new Set(currentItems.map((item) => item.id));
 
     if (visibleIds.size === 0) {
-      visibleItemsRef.current = items;
-      setVisibleItems(items);
+      visibleItemsRef.current = refreshedItems;
+      setVisibleItems(refreshedItems);
       setHasNewEntries(false);
 
       return;
     }
 
-    if (items.length === 0) {
-      visibleItemsRef.current = items;
-      setVisibleItems(items);
+    if (refreshedItems.length === 0) {
+      visibleItemsRef.current = refreshedItems;
+      setVisibleItems(refreshedItems);
       setHasNewEntries(false);
 
       return;
     }
 
-    const firstVisibleIndex = items.findIndex((item) => visibleIds.has(item.id));
+    const firstVisibleIndex = refreshedItems.findIndex((item) => visibleIds.has(item.id));
 
     if (firstVisibleIndex > 0) {
-      const heldItems = items.slice(firstVisibleIndex);
+      const refreshedById = new Map(refreshedItems.map((item) => [item.id, item]));
+      const heldItems = isReset
+        ? currentItems
+            .filter((item) => hasNextPage || refreshedById.has(item.id))
+            .map((item) => refreshedById.get(item.id) ?? item)
+        : refreshedItems.slice(firstVisibleIndex);
 
       visibleItemsRef.current = heldItems;
       setVisibleItems(heldItems);
@@ -84,17 +122,17 @@ export function useAutoLoad<T extends AutoLoadItem = AutoLoadItem>({
     }
 
     if (firstVisibleIndex === 0) {
-      visibleItemsRef.current = items;
-      setVisibleItems(items);
+      visibleItemsRef.current = refreshedItems;
+      setVisibleItems(refreshedItems);
       setHasNewEntries(false);
 
       return;
     }
 
-    visibleItemsRef.current = items;
-    setVisibleItems(items);
+    visibleItemsRef.current = refreshedItems;
+    setVisibleItems(refreshedItems);
     setHasNewEntries(false);
-  }, [enabled, items, scope]);
+  }, [enabled, hasNextPage, isReset, items, scope]);
 
   const loadNewEntries = useCallback(() => {
     visibleItemsRef.current = latestItems.current;
@@ -138,7 +176,7 @@ export function useAutoLoad<T extends AutoLoadItem = AutoLoadItem>({
   const scopeChanged = scopeRef.current !== scope;
 
   return {
-    items: enabled || scopeChanged ? items : visibleItems,
+    items: scopeChanged ? items : visibleItems,
     hasNewEntries: !enabled && !scopeChanged && hasNewEntries,
     loadNewEntries,
   };

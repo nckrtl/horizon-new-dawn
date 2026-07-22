@@ -8,6 +8,7 @@ import { JobTablePrimaryCell } from "@/components/jobs/job-table-primary-cell";
 import { BatchesNavigationIcon } from "@/components/navigation-icons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { show as failedJobShow } from "@/generated/routes/horizon-new-dawn/failed-jobs";
 import { useSortableRows, type SortColumn } from "@/hooks/use-sortable-rows";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
@@ -16,6 +17,7 @@ import type { JobRow } from "@/types/jobs";
 
 const columns: SortColumn<JobRow>[] = [
   { key: "name", value: (job) => job.name },
+  { key: "attempts", value: (job) => job.attempts },
   { key: "failedAt", value: (job) => job.failedAt },
 ];
 const dateFormatter = new Intl.DateTimeFormat("sv-SE", {
@@ -75,6 +77,13 @@ export function BatchFailedJobsTable({
             className="px-6"
           />
           <SortableTableHead
+            label="Attempts"
+            columnKey="attempts"
+            direction={directionFor("attempts", sorted.sort)}
+            onSort={sorted.toggle}
+            className="w-[120px] px-6 text-right"
+          />
+          <SortableTableHead
             label="Failed At"
             columnKey="failedAt"
             direction={directionFor("failedAt", sorted.sort)}
@@ -85,11 +94,11 @@ export function BatchFailedJobsTable({
       </TableHeader>
       <TableBody>
         {notice && sorted.rows.length > 0 ? (
-          <TableNoticeRow columns={2}>{notice}</TableNoticeRow>
+          <TableNoticeRow columns={3}>{notice}</TableNoticeRow>
         ) : null}
         {sorted.rows.length === 0 ? (
           <TableEmpty
-            columns={2}
+            columns={3}
             title={emptyTitle}
             description={emptyDescription}
             icon={BatchesNavigationIcon}
@@ -102,6 +111,7 @@ export function BatchFailedJobsTable({
             <TableRow
               className="cursor-pointer"
               key={job.id}
+              data-test="batch-failed-job-row"
               onClick={(event) => {
                 if (isInteractiveTarget(event.target)) {
                   return;
@@ -119,6 +129,24 @@ export function BatchFailedJobsTable({
                 href={detailUrl}
                 details={<span>{job.id}</span>}
               />
+              <TableCell
+                className="px-6 text-right tabular-nums text-muted-foreground"
+                data-test="batch-failed-attempts"
+              >
+                {job.attemptsComplete !== false ? (
+                  job.attempts
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger render={<span className="cursor-help" />}>
+                      {job.attempts}+
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Earlier attempts were trimmed by Horizon. At least {job.attempts} attempts are
+                      known.
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </TableCell>
               <TableCell className="px-6 text-muted-foreground">
                 {job.failedAt === null ? "—" : dateFormatter.format(job.failedAt * 1000)}
               </TableCell>

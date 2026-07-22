@@ -48,7 +48,7 @@ final readonly class RetryAllFailedJobs
 
                 $seen[$job->id] = true;
 
-                if ($this->retry->handle($job->id, $job)) {
+                if ($this->retry->handleBulk($job->id, $job)) {
                     $scheduled++;
                 }
             }

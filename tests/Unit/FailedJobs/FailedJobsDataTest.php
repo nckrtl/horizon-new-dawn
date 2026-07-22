@@ -15,6 +15,52 @@ use function NckRtl\HorizonNewDawn\Tests\Support\horizonJob;
 use function NckRtl\HorizonNewDawn\Tests\Support\mockDashboardContract;
 
 describe('FailedJobsData', function (): void {
+    it('finds retryable jobs beyond the first failed-job page', function (): void {
+        $ineligible = [];
+
+        for ($index = 0; $index < 50; $index++) {
+            $job = horizonJob($index, "failed-{$index}");
+            $job->retried_by = json_encode([
+                ['id' => "retry-{$index}", 'status' => 'completed'],
+            ], JSON_THROW_ON_ERROR);
+            $ineligible[] = $job;
+        }
+
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturnsFor($repository, 'getFailed', ['-1'], new Collection($ineligible));
+        dashboardReturnsFor($repository, 'getFailed', ['49'], new Collection([
+            horizonJob(50, 'retryable'),
+        ]));
+
+        $data = new FailedJobsData(
+            $repository,
+            mockDashboardContract(TagRepository::class),
+            new JobsData($repository),
+            new FailedJobRetryEligibility,
+        );
+
+        expect($data->hasRetryable())->toBeTrue();
+    });
+
+    it('reports no retryable jobs when every retained failure has already been retried', function (): void {
+        $job = horizonJob(0, 'failed-1');
+        $job->retried_by = json_encode([
+            ['id' => 'retry-1', 'status' => 'completed'],
+        ], JSON_THROW_ON_ERROR);
+
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturnsFor($repository, 'getFailed', ['-1'], new Collection([$job]));
+
+        $data = new FailedJobsData(
+            $repository,
+            mockDashboardContract(TagRepository::class),
+            new JobsData($repository),
+            new FailedJobRetryEligibility,
+        );
+
+        expect($data->hasRetryable())->toBeFalse();
+    });
+
     it('normalizes a failed row with its retry metadata', function (): void {
         $job = horizonJob(0, 'failed-1');
         $job->retried_by = json_encode([
@@ -64,7 +110,7 @@ describe('FailedJobsData', function (): void {
         expect($data->row($fresh)?->retryEligible)->toBeTrue()
             ->and($data->row($allFailed)?->retryEligible)->toBeTrue()
             ->and($data->row($pending)?->retryEligible)->toBeFalse()
-            ->and($data->row($retryChild)?->retryEligible)->toBeFalse();
+            ->and($data->row($retryChild)?->retryEligible)->toBeTrue();
     });
 
     it('returns safe failed rows with their retry state', function (): void {

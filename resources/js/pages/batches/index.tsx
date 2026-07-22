@@ -22,7 +22,12 @@ import { useAutoLoad } from "@/hooks/use-auto-load";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { urlWithCurrentQuery } from "@/lib/url-query";
-import type { BatchFilterValues, BatchesPageProps, BatchStatus } from "@/types/batches";
+import type {
+  BatchClearCounts,
+  BatchFilterValues,
+  BatchesPageProps,
+  BatchStatus,
+} from "@/types/batches";
 
 type BatchTab = "all" | BatchStatus;
 
@@ -35,13 +40,20 @@ const batchTabs: Array<{ label: string; value: BatchTab }> = [
 ];
 const numberFormatter = new Intl.NumberFormat();
 const emptyBatchFilters: BatchFilterValues = { queue: null, connection: null, created: null };
+const emptyBatchClearCounts: BatchClearCounts = {
+  incomplete: 0,
+  complete: 0,
+  finished: 0,
+  cancelled: 0,
+  available: false,
+};
 
 function BatchesIndex({
   horizon,
   query,
   filters = emptyBatchFilters,
   batches,
-  finishedBatches = 0,
+  batchClearCounts = emptyBatchClearCounts,
 }: BatchesPageProps) {
   const [search, setSearch] = useState(query);
   const [activeTab, setActiveTab] = useState<BatchTab>("all");
@@ -165,9 +177,7 @@ function BatchesIndex({
         <ListPageHeader
           title="Batches"
           separated={false}
-          actions={
-            <BatchesActions horizonBaseUrl={horizon.baseUrl} finishedBatches={finishedBatches} />
-          }
+          actions={<BatchesActions horizonBaseUrl={horizon.baseUrl} counts={batchClearCounts} />}
         />
         <CardContent className="p-0">
           <Tabs

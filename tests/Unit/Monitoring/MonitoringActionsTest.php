@@ -100,8 +100,12 @@ it('retries eligible failed jobs for a monitored tag', function (): void {
 
     expect($scheduled)->toBe(48);
     Bus::assertDispatchedTimes(HorizonRetryFailedJob::class, 48);
+    Bus::assertDispatched(
+        HorizonRetryFailedJob::class,
+        fn (HorizonRetryFailedJob $job): bool => $job->id === 'failed-1',
+    );
     Bus::assertNotDispatched(
         HorizonRetryFailedJob::class,
-        fn (HorizonRetryFailedJob $job): bool => in_array($job->id, ['failed-1', 'failed-2', 'failed-3', 'failed-51'], true),
+        fn (HorizonRetryFailedJob $job): bool => in_array($job->id, ['failed-2', 'failed-3', 'failed-4', 'failed-51'], true),
     );
 });

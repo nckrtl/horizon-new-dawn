@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Contracts\Redis\Factory as RedisFactory;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 use JsonException;
 use Laravel\Horizon\Contracts\JobRepository;
@@ -100,6 +101,8 @@ final readonly class JobsData
         int $retryCount = 0,
         ?string $latestRetryStatus = null,
         bool $retryEligible = false,
+        ?int $attemptsOverride = null,
+        bool $attemptsComplete = true,
     ): ?JobRowData {
         $id = $job->id ?? null;
         $name = $job->name ?? null;
@@ -111,10 +114,21 @@ final readonly class JobsData
         $payload = $this->decodePayload($job->payload ?? null);
         $pushedAt = $this->timestamp($payload['pushedAt'] ?? null);
         $decodedCommand = $this->decodedCommand($payload);
+        $status = is_string($job->status ?? null) ? $job->status : 'unknown';
         $reservedAt = $this->timestamp($job->reserved_at ?? null);
-        $completedAt = $this->timestamp($job->completed_at ?? null);
-        $failedAt = $this->timestamp($job->failed_at ?? null);
-        $runtime = $this->runtime($reservedAt, $completedAt ?? $failedAt);
+        $completedAt = $status === 'completed'
+            ? $this->timestamp($job->completed_at ?? null)
+            : null;
+        $failedAt = $status === 'failed'
+            ? $this->timestamp($job->failed_at ?? null)
+            : null;
+        $finishedAt = match ($status) {
+            'failed' => $failedAt,
+            'completed' => $completedAt,
+            'reserved' => (float) Date::now()->format('U.u'),
+            default => null,
+        };
+        $runtime = $this->runtime($reservedAt, $finishedAt);
 
         return new JobRowData(
             id: $id,
@@ -123,9 +137,10 @@ final readonly class JobsData
             shortName: Str::afterLast($name, '\\'),
             connection: is_string($job->connection ?? null) ? $job->connection : 'default',
             queue: is_string($job->queue ?? null) ? $job->queue : 'default',
-            status: is_string($job->status ?? null) ? $job->status : 'unknown',
+            status: $status,
             tags: $this->tags($payload),
-            attempts: is_numeric($payload['attempts'] ?? null) ? (int) $payload['attempts'] : 0,
+            attempts: $attemptsOverride
+                ?? (is_numeric($payload['attempts'] ?? null) ? (int) $payload['attempts'] : 0),
             retryOf: is_string($payload['retry_of'] ?? null) ? $payload['retry_of'] : null,
             delay: $this->delaySeconds($job->delay ?? null, $decodedCommand, $pushedAt),
             pushedAt: $pushedAt,
@@ -139,6 +154,7 @@ final readonly class JobsData
             retryCount: $retryCount,
             latestRetryStatus: $latestRetryStatus,
             retryEligible: $retryEligible,
+            attemptsComplete: $attemptsComplete,
         );
     }
 

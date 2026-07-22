@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Contracts\Redis\Factory as RedisFactory;
 use Illuminate\Redis\Connections\Connection;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Date;
 use Laravel\Horizon\Contracts\JobRepository;
 use NckRtl\HorizonNewDawn\Jobs\JobListType;
 use NckRtl\HorizonNewDawn\Jobs\JobsData;
@@ -15,6 +16,10 @@ use function NckRtl\HorizonNewDawn\Tests\Support\horizonJob;
 use function NckRtl\HorizonNewDawn\Tests\Support\mockDashboardContract;
 
 describe('JobsData', function (): void {
+    afterEach(function (): void {
+        Date::setTestNow();
+    });
+
     it('normalizes a full first page and exposes its next Horizon index', function (): void {
         $repository = mockDashboardContract(JobRepository::class);
         $jobs = new Collection(array_map(
@@ -39,6 +44,37 @@ describe('JobsData', function (): void {
                 'tags' => ['tenant:1', 'import'],
             ])
             ->and($first)->not->toHaveKeys(['payload', 'exception', 'context']);
+    });
+
+    it('uses the failure timestamp for failed job timing', function (): void {
+        $repository = mockDashboardContract(JobRepository::class);
+        $job = horizonJob(0);
+        $job->status = 'failed';
+        $job->reserved_at = '1784281001.25';
+        $job->completed_at = '1784281002.75';
+        $job->failed_at = '1784281004.5';
+
+        $row = (new JobsData($repository))->row($job);
+
+        expect($row)->not->toBeNull()
+            ->and($row?->completedAt)->toBeNull()
+            ->and($row?->failedAt)->toBe(1_784_281_004.5)
+            ->and($row?->runtime)->toBe(3.25);
+    });
+
+    it('measures reserved job runtime through the current observation time', function (): void {
+        Date::setTestNow(Date::createFromFormat('U.u', '1784281004.500000'));
+        $repository = mockDashboardContract(JobRepository::class);
+        $job = horizonJob(0);
+        $job->status = 'reserved';
+        $job->reserved_at = '1784281001.25';
+
+        $row = (new JobsData($repository))->row($job);
+
+        expect($row)->not->toBeNull()
+            ->and($row?->completedAt)->toBeNull()
+            ->and($row?->failedAt)->toBeNull()
+            ->and($row?->runtime)->toBe(3.25);
     });
 
     it('stops scrolling when Horizon returns a short page', function (): void {

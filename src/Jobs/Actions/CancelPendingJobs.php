@@ -19,13 +19,15 @@ final readonly class CancelPendingJobs
         private CancelPendingJob $cancel,
     ) {}
 
-    public function handle(PendingJobCancellationScope $scope): CancelPendingJobsResultData
-    {
+    public function handle(
+        PendingJobCancellationScope $scope,
+        ?string $queue = null,
+    ): CancelPendingJobsResultData {
         $cancelled = 0;
         $batched = 0;
         $failed = 0;
 
-        foreach ($this->pendingJobIds() as $id) {
+        foreach ($this->pendingJobIds($queue) as $id) {
             try {
                 match ($this->cancel->handle($id, $scope)) {
                     PendingJobCancellationResult::Cancelled => $cancelled++,
@@ -42,7 +44,7 @@ final readonly class CancelPendingJobs
     }
 
     /** @return array<int, string> */
-    private function pendingJobIds(): array
+    private function pendingJobIds(?string $queue): array
     {
         $total = max(0, (int) $this->jobs->countPending());
         $ids = [];
@@ -50,8 +52,13 @@ final readonly class CancelPendingJobs
         for ($inspected = 0; $inspected < $total; $inspected += self::PAGE_SIZE) {
             foreach ($this->jobs->getPending((string) ($inspected - 1)) as $job) {
                 $id = is_object($job) ? ($job->id ?? null) : null;
+                $jobQueue = is_object($job) ? ($job->queue ?? null) : null;
 
-                if (is_string($id) && $id !== '') {
+                if (
+                    is_string($id)
+                    && $id !== ''
+                    && ($queue === null || $jobQueue === $queue)
+                ) {
                     $ids[$id] = $id;
                 }
             }

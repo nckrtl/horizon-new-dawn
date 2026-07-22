@@ -58,7 +58,7 @@ const jobs: JobRow[] = [
     retryCompleted: false,
     retryCount: 0,
     latestRetryStatus: null,
-    retryEligible: false,
+    retryEligible: true,
   },
   {
     id: "failed-again",
@@ -82,7 +82,7 @@ const jobs: JobRow[] = [
     retryCompleted: false,
     retryCount: 2,
     latestRetryStatus: "failed",
-    retryEligible: true,
+    retryEligible: false,
   },
 ];
 
@@ -108,8 +108,8 @@ describe("FailedJobTable", () => {
       "title",
       "Total retries: 2, Last retry status: Completed",
     );
-    expect(within(rows[0]).queryByRole("button", { name: "Retry failed job" })).toBeNull();
-    expect(within(rows[1]).getByRole("button", { name: "Retry failed job" })).toBeEnabled();
+    expect(within(rows[0]).getByRole("button", { name: "Retry failed job" })).toBeEnabled();
+    expect(within(rows[1]).queryByRole("button", { name: "Retry failed job" })).toBeNull();
     expect(within(rows[2]).queryByRole("button", { name: "Retry failed job" })).toBeNull();
     expect(screen.getByRole("link", { name: "FastJob" })).toHaveAttribute(
       "href",

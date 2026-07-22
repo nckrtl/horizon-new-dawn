@@ -1,8 +1,9 @@
 import { router } from "@inertiajs/react";
-import { EllipsisIcon, LoaderCircleIcon, Trash2Icon } from "lucide-react";
+import { LoaderCircleIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ActionMenuTrigger } from "@/components/ui/action-menu-trigger";
 import {
   Dialog,
   DialogClose,
@@ -12,12 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { destroy as clearAllQueues } from "@/generated/routes/horizon-new-dawn/queues/clear-all";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 
@@ -47,19 +43,11 @@ export function QueuesActions({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Queue list actions"
-              disabled={working}
-            />
-          }
-        >
-          <EllipsisIcon />
-        </DropdownMenuTrigger>
+        <ActionMenuTrigger
+          available={pendingJobs > 0}
+          label="Queue list actions"
+          working={working}
+        />
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem
             variant="destructive"

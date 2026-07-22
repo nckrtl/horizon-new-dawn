@@ -93,7 +93,7 @@ describe("JobTable", () => {
       />,
     );
 
-    expect(screen.getAllByRole("columnheader")).toHaveLength(3);
+    expect(screen.getAllByRole("columnheader")).toHaveLength(4);
     expect(screen.getByRole("columnheader", { name: "State" })).toBeVisible();
     expect(screen.queryByRole("columnheader", { name: /runtime/i })).not.toBeInTheDocument();
     expect(screen.getByText("Delayed")).toBeVisible();

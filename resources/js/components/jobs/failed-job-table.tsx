@@ -1,5 +1,5 @@
 import { Link, router } from "@inertiajs/react";
-import { RotateCcwIcon, TriangleAlertIcon } from "lucide-react";
+import { TriangleAlertIcon } from "lucide-react";
 
 import { SortableTableHead } from "@/components/data-table/sortable-table-head";
 import { NewEntriesTableRow } from "@/components/data-table/new-entries-alert";
@@ -8,6 +8,7 @@ import { FailedJobActionsMenu } from "@/components/jobs/failed-job-actions";
 import { JobTablePrimaryCell } from "@/components/jobs/job-table-primary-cell";
 import { FailedJobsNavigationIcon } from "@/components/navigation-icons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { show as failedJobShow } from "@/generated/routes/horizon-new-dawn/failed-jobs";
@@ -41,6 +42,22 @@ function directionFor(key: string, sort: { key: string; direction: "asc" | "desc
 
 function upperFirst(value: string | null) {
   return value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : "Unknown";
+}
+
+function retryStatus(status: string | null) {
+  if (status === "pending" || status === "reserved") {
+    return { label: "Retry queued", variant: "retry" } as const;
+  }
+
+  if (status === "completed") {
+    return { label: "Retried · Completed", variant: "success" } as const;
+  }
+
+  if (status === "failed") {
+    return { label: "Retried · Failed", variant: "destructive" } as const;
+  }
+
+  return { label: "Retried · Unknown", variant: "warning" } as const;
 }
 
 export function FailedJobTable({
@@ -119,6 +136,7 @@ export function FailedJobTable({
           const retryOfUrl = job.retryOf
             ? resolveHorizonRoute(failedJobShow(job.retryOf), horizonBaseUrl).url
             : null;
+          const latestRetry = retryStatus(job.latestRetryStatus);
 
           return (
             <TableRow
@@ -152,7 +170,7 @@ export function FailedJobTable({
                           />
                         }
                       >
-                        <RotateCcwIcon className="size-[11px]" /> Retried
+                        <Badge variant={latestRetry.variant}>{latestRetry.label}</Badge>
                       </TooltipTrigger>
                       <TooltipContent>
                         Total retries: {job.retryCount}, Last retry status:{" "}

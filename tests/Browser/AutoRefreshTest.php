@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use function NckRtl\HorizonNewDawn\Tests\Support\bindBrowserInfiniteScrollRefreshFixtures;
 use function NckRtl\HorizonNewDawn\Tests\Support\bindBrowserPageFixtures;
 
 describe('automatic refresh', function (): void {
@@ -96,6 +97,87 @@ describe('automatic refresh', function (): void {
         expect($pollMetadata)->toBe([
             'mergeIntent' => null,
             'reset' => 'jobs',
+        ]);
+
+        $page
+            ->assertNoJavaScriptErrors()
+            ->assertNoConsoleLogs();
+    });
+
+    it('keeps loaded infinite-scroll rows mounted while polling updates the first page', function (): void {
+        bindBrowserInfiniteScrollRefreshFixtures();
+
+        $page = visit('/horizon/failed?starting_at=-1');
+
+        $result = $page->script(<<<'JS'
+            () => new Promise((resolve, reject) => {
+                const dataRows = () => Array.from(document.querySelectorAll('main tbody tr'))
+                    .filter((row) => row.querySelector('a[href*="/failed/"]') !== null)
+                let loadedRowCount = null
+                const timeout = window.setTimeout(
+                    () => finish(new Error('Timed out waiting for the refreshed failed jobs.')),
+                    10000,
+                )
+                const observer = new MutationObserver(inspect)
+
+                function finish(error = null, value = null) {
+                    window.clearTimeout(timeout)
+                    document.removeEventListener('inertia:success', inspect)
+                    observer.disconnect()
+
+                    if (error) {
+                        reject(error)
+                        return
+                    }
+
+                    resolve(value)
+                }
+
+                function inspect() {
+                    const rows = dataRows()
+                    const firstJob = rows[0]?.querySelector('a[href*="/failed/"]')
+
+                    if (loadedRowCount === null && rows.length === 100) {
+                        loadedRowCount = rows.length
+                        window.scrollTo(0, 0)
+                        return
+                    }
+
+                    if (loadedRowCount === null || !firstJob?.getAttribute('href')?.endsWith('/failed-101')) {
+                        return
+                    }
+
+                    const updatedRow = rows.find(
+                        (row) => row.querySelector('a[href$="/failed-100"]') !== null,
+                    )
+
+                    finish(null, {
+                        loadedRowCount,
+                        refreshedRowCount: rows.length,
+                        existingRowUpdated: updatedRow?.textContent?.includes('RefreshedImportFeed') ?? false,
+                    })
+                }
+
+                const toggle = document.querySelector('[aria-label="Auto load new entries"]')
+
+                if (toggle?.getAttribute('aria-pressed') !== 'true') {
+                    toggle?.click()
+                }
+
+                document.addEventListener('inertia:success', inspect)
+                observer.observe(document.querySelector('main'), {
+                    childList: true,
+                    subtree: true,
+                    characterData: true,
+                })
+                window.scrollTo(0, document.documentElement.scrollHeight)
+            })
+        JS);
+
+        expect($result)->toBe([
+            'loadedRowCount' => 100,
+            'refreshedRowCount' => 100,
+            'existingRowUpdated' => true,
         ]);
 
         $page

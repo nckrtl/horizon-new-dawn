@@ -183,6 +183,44 @@ describe('CancelPendingJob', function (): void {
             ->and($connection->commands)->toHaveCount(1);
     });
 
+    it('limits bulk cancellation to the requested queue', function (): void {
+        $imports = horizonJob(0, 'imports-1');
+        $imports->status = 'pending';
+        $imports->completed_at = null;
+        $imports->queue = 'imports';
+
+        $reports = horizonJob(1, 'reports-1');
+        $reports->status = 'pending';
+        $reports->completed_at = null;
+        $reports->queue = 'reports';
+
+        $jobs = mockDashboardContract(JobRepository::class);
+        dashboardReturns($jobs, 'countPending', 2);
+        dashboardReturnsFor($jobs, 'getPending', ['-1'], new Collection([$imports, $reports]));
+        dashboardReturnsFor($jobs, 'getJobs', [[$imports->id]], new Collection([$imports]));
+
+        $connection = new CancelPendingJobRedisConnectionStub(1);
+        $cancel = new CancelPendingJob(
+            $jobs,
+            new CancelPendingJobQueueManagerStub(
+                app(),
+                new CancelPendingJobRedisQueueStub($connection),
+            ),
+            new CancelPendingJobMetadataStub,
+            new ReleaseCancelledJobLocks(app(CacheFactory::class), app(Encrypter::class)),
+        );
+
+        $result = (new CancelPendingJobs($jobs, $cancel))->handle(
+            PendingJobCancellationScope::Pending,
+            'imports',
+        );
+
+        expect($result->cancelled)->toBe(1)
+            ->and($result->batched)->toBe(0)
+            ->and($result->failed)->toBe(0)
+            ->and($connection->commands)->toHaveCount(1);
+    });
+
     it('does not clean up Horizon metadata when a worker reserves the job first', function (): void {
         $job = horizonJob(0, 'pending-1');
         $job->status = 'pending';

@@ -8,6 +8,7 @@ import { QueueBatchesActions } from "@/components/batches/queue-batches-actions"
 import { FailedJobTable } from "@/components/jobs/failed-job-table";
 import { JobFilters } from "@/components/jobs/job-filters";
 import { JobTable } from "@/components/jobs/job-table";
+import { PendingJobsActions } from "@/components/jobs/pending-jobs-actions";
 import { QueueActionsMenu } from "@/components/queues/queue-actions-menu";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -65,7 +66,6 @@ export function QueueActivityTabs({
   summary,
   activity,
   horizonBaseUrl,
-  queuePausing = true,
 }: {
   queue: string;
   tab: QueueActivityTab;
@@ -73,7 +73,6 @@ export function QueueActivityTabs({
   summary: QueueSummary;
   activity: QueueActivity;
   horizonBaseUrl: string;
-  queuePausing?: boolean;
 }) {
   const tabsListRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
@@ -200,13 +199,19 @@ export function QueueActivityTabs({
                 failedJobs={batchFailedJobs}
                 horizonBaseUrl={horizonBaseUrl}
               />
-            ) : tab === "pending" || tab === "failed" ? (
+            ) : tab === "pending" ? (
+              <PendingJobsActions
+                horizonBaseUrl={horizonBaseUrl}
+                queue={queue}
+                counts={{ ready: summary.pendingReadyNow, delayed: summary.pendingDelayed }}
+                disabled={!activity.available}
+              />
+            ) : tab === "failed" ? (
               <QueueActionsMenu
                 queue={queue}
                 targets={summary.pauseTargets}
                 failedJobs={summary.failedJobs}
                 horizonBaseUrl={horizonBaseUrl}
-                queuePausing={queuePausing}
                 scope={tab}
               />
             ) : null}

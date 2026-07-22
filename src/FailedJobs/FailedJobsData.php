@@ -81,6 +81,43 @@ final readonly class FailedJobsData
         }
     }
 
+    public function hasRetryable(): bool
+    {
+        try {
+            $afterIndex = -1;
+
+            while (true) {
+                $failed = $this->repository->getFailed((string) $afterIndex);
+
+                if ($failed->isEmpty()) {
+                    return false;
+                }
+
+                foreach ($failed as $job) {
+                    if (is_object($job) && $this->retryEligibility->allowsBulk($job)) {
+                        return true;
+                    }
+                }
+
+                if ($failed->count() < self::PAGE_SIZE) {
+                    return false;
+                }
+
+                $nextIndex = $this->lastIndex($failed);
+
+                if ($nextIndex === null || $nextIndex <= $afterIndex) {
+                    return false;
+                }
+
+                $afterIndex = $nextIndex;
+            }
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return false;
+        }
+    }
+
     public function row(object $job): ?JobRowData
     {
         $retries = $this->retries($job);

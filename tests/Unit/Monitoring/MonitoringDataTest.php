@@ -25,6 +25,7 @@ describe('MonitoringData', function (): void {
         $alphaRecent->completed_at = '1784281100.00';
         $alphaRecent->failed_at = null;
         $zetaFailed = horizonJob(1, 'zeta-failed');
+        $zetaFailed->status = 'failed';
         $zetaFailed->completed_at = null;
         $zetaFailed->failed_at = '1784281200.00';
 

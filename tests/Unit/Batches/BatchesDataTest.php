@@ -18,7 +18,6 @@ use NckRtl\HorizonNewDawn\Batches\BatchJobsData;
 use NckRtl\HorizonNewDawn\Jobs\JobsData;
 use NckRtl\HorizonNewDawn\Tests\Support\HorizonJob;
 
-use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturns;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsFor;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardThrows;
 use function NckRtl\HorizonNewDawn\Tests\Support\horizonBatch;
@@ -44,8 +43,9 @@ describe('BatchesData', function (): void {
             'id' => 'batch-1',
             'connection' => 'redis',
             'queue' => 'imports',
-            'pendingJobs' => 3,
+            'pendingJobs' => 2,
             'failedJobs' => 1,
+            'failedJobAttempts' => 1,
             'processedJobs' => 7,
             'progress' => 70,
             'status' => 'failures',
@@ -54,6 +54,23 @@ describe('BatchesData', function (): void {
         $batch->options['queue'] = '';
 
         expect($data->queue($batch))->toBe('default');
+    });
+
+    it('separates unresolved failed jobs from recorded failure attempts', function (): void {
+        $repository = mockDashboardContract(BatchRepository::class);
+        $jobs = mockDashboardContract(JobRepository::class);
+        $batch = horizonBatch(
+            'retried-failures',
+            totalJobs: 16,
+            pendingJobs: 4,
+            failedJobs: 65,
+        );
+
+        $row = batchData($repository, $jobs)->row($batch);
+
+        expect($row->pendingJobs)->toBe(0)
+            ->and($row->failedJobs)->toBe(4)
+            ->and($row->failedJobAttempts)->toBe(65);
     });
 
     it('resolves effective batch attribution from explicit options and queue configuration', function (): void {
@@ -290,29 +307,6 @@ describe('BatchesData', function (): void {
         Date::setTestNow();
     });
 
-    it('counts only finished and cancelled batches as clearable', function (): void {
-        config()->set('queue.batching.database', null);
-        config()->set('queue.batching.table', 'job_batches');
-        $repository = mockDashboardContract(BatchRepository::class);
-        $jobs = mockDashboardContract(JobRepository::class);
-        $resolver = mockDashboardContract(ConnectionResolverInterface::class);
-        $connection = mockDashboardContract(ConnectionInterface::class);
-        $builder = mockDashboardContract(Builder::class);
-
-        dashboardReturnsFor($resolver, 'connection', [null], $connection);
-        dashboardReturnsFor($connection, 'table', ['job_batches'], $builder);
-        dashboardReturnsFor($builder, 'whereNotNull', ['finished_at'], $builder);
-        dashboardReturnsFor($builder, 'orWhereNotNull', ['cancelled_at'], $builder);
-        dashboardReturns($builder, 'count', 3);
-
-        $data = new BatchesData(
-            $repository,
-            new BatchJobsData($jobs, new JobsData($jobs)),
-            $resolver,
-        );
-
-        expect($data->finishedCount())->toBe(3);
-    });
 });
 
 function batchData(

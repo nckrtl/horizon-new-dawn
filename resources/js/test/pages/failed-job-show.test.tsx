@@ -46,14 +46,16 @@ describe("FailedJobShow", () => {
     expect(screen.getByRole("button", { name: "Remove failed job" })).toBeEnabled();
   });
 
-  it("offers retry when every known retry attempt failed", () => {
+  it("offers retry for a failed retry leaf", () => {
     render(
       <FailedJobShow
         {...props}
         job={{
           ...props.job,
+          retryOf: "cleared-parent",
+          retried: false,
           retryEligible: true,
-          retriedBy: [{ id: "retry-1", status: "failed", retriedAt: 1_784_281_100 }],
+          retriedBy: [],
         }}
       />,
     );

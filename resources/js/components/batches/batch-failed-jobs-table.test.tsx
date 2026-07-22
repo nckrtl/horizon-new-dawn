@@ -10,7 +10,13 @@ vi.mock("@inertiajs/react", async () => {
   return inertiaTestMocks();
 });
 
-const failedJob = (id: string, name: string, failedAt: number): JobRow => ({
+const failedJob = (
+  id: string,
+  name: string,
+  failedAt: number,
+  attempts = 1,
+  attemptsComplete = true,
+): JobRow => ({
   id,
   index: 0,
   name,
@@ -19,7 +25,8 @@ const failedJob = (id: string, name: string, failedAt: number): JobRow => ({
   queue: "imports",
   status: "failed",
   tags: ["tenant:1"],
-  attempts: 1,
+  attempts,
+  attemptsComplete,
   retryOf: null,
   delay: null,
   pushedAt: failedAt - 2,
@@ -40,14 +47,14 @@ describe("BatchFailedJobsTable", () => {
     render(
       <BatchFailedJobsTable
         jobs={[
-          failedJob("failed-2", "App\\Jobs\\SlowExport", 1_784_282_000),
-          failedJob("failed-1", "App\\Jobs\\FastImport", 1_784_281_000),
+          failedJob("failed-2", "App\\Jobs\\SlowExport", 1_784_282_000, 5, false),
+          failedJob("failed-1", "App\\Jobs\\FastImport", 1_784_281_000, 2),
         ]}
         horizonBaseUrl="/horizon"
       />,
     );
 
-    expect(screen.getAllByRole("columnheader")).toHaveLength(2);
+    expect(screen.getAllByRole("columnheader")).toHaveLength(3);
     expect(screen.getByRole("link", { name: "FastImport" })).toHaveAttribute(
       "href",
       "/horizon/failed/failed-1",
@@ -55,6 +62,12 @@ describe("BatchFailedJobsTable", () => {
     expect(
       screen.queryByRole("button", { name: "Sort by Runtime ascending" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByText("5+")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Attempts ascending" }));
+    expect(within(screen.getAllByRole("rowgroup")[1]).getAllByRole("row")[0]).toHaveTextContent(
+      "FastImport",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Sort by Failed At ascending" }));
     expect(within(screen.getAllByRole("rowgroup")[1]).getAllByRole("row")[0]).toHaveTextContent(

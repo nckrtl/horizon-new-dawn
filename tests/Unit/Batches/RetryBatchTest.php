@@ -18,7 +18,7 @@ use function NckRtl\HorizonNewDawn\Tests\Support\horizonJob;
 use function NckRtl\HorizonNewDawn\Tests\Support\mockDashboardContract;
 
 describe('RetryBatch', function (): void {
-    it('retries eligible failed jobs once and skips retry payloads', function (): void {
+    it('retries eligible failed leaves once', function (): void {
         Bus::fake();
 
         $batch = horizonBatch('batch-1', failedJobs: 3, failedJobIds: ['failed-1', 'failed-2', 'failed-1']);
@@ -55,6 +55,14 @@ describe('RetryBatch', function (): void {
         Bus::assertDispatched(
             HorizonRetryFailedJob::class,
             fn (HorizonRetryFailedJob $job): bool => $job->id === 'failed-1',
+        );
+        Bus::assertDispatched(
+            HorizonRetryFailedJob::class,
+            fn (HorizonRetryFailedJob $job): bool => $job->id === 'failed-2',
+        );
+        Bus::assertNotDispatched(
+            HorizonRetryFailedJob::class,
+            fn (HorizonRetryFailedJob $job): bool => $job->id === 'failed-4',
         );
     });
 

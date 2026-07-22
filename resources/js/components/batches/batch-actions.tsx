@@ -1,8 +1,9 @@
 import { router } from "@inertiajs/react";
-import { BanIcon, EllipsisIcon, LoaderCircleIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
+import { BanIcon, LoaderCircleIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ActionMenuTrigger } from "@/components/ui/action-menu-trigger";
 import {
   Dialog,
   DialogClose,
@@ -17,7 +18,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { store as cancelBatch } from "@/generated/routes/horizon-new-dawn/batches/cancel";
 import { destroy as clearBatchFailedJobs } from "@/generated/routes/horizon-new-dawn/batches/failed/clear";
@@ -74,19 +74,7 @@ export function BatchPendingJobsActions({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={ariaLabel}
-              disabled={working}
-            />
-          }
-        >
-          <EllipsisIcon />
-        </DropdownMenuTrigger>
+        <ActionMenuTrigger available={canRetry || canCancel} label={ariaLabel} working={working} />
         <DropdownMenuContent align="end" className="w-52">
           {canRetry ? (
             <>
@@ -193,19 +181,11 @@ export function BatchFailedJobsActions({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Failed batch jobs actions"
-              disabled={disabled || working}
-            />
-          }
-        >
-          <EllipsisIcon />
-        </DropdownMenuTrigger>
+        <ActionMenuTrigger
+          available={!disabled}
+          label="Failed batch jobs actions"
+          working={working}
+        />
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuItem onSelect={retry}>
             <RotateCcwIcon className="size-3.5" />

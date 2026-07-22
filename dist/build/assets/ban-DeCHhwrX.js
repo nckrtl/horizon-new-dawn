@@ -1,1 +1,0 @@
-import{i as e}from"./dist-D_MlR5t0.js";var t=e(`ban`,[[`circle`,{cx:`12`,cy:`12`,r:`10`,key:`1mglay`}],[`path`,{d:`M4.929 4.929 19.07 19.071`,key:`196cmz`}]]);export{t};

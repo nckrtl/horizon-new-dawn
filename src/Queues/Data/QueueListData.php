@@ -25,4 +25,21 @@ final class QueueListData extends Data
 
         return null;
     }
+
+    public function pendingCounts(): PendingJobCountsData
+    {
+        if (! $this->available) {
+            return new PendingJobCountsData(false, null, null);
+        }
+
+        $ready = 0;
+        $delayed = 0;
+
+        foreach ($this->queues as $queue) {
+            $ready += $queue->ready;
+            $delayed += $queue->delayed;
+        }
+
+        return new PendingJobCountsData(true, $ready, $delayed);
+    }
 }

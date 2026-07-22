@@ -85,7 +85,11 @@ function FailedJobsIndex({ horizon, query, jobs }: FailedJobsPageProps) {
           />
         }
         actions={
-          <FailedJobsActionsMenu horizonBaseUrl={horizon.baseUrl} disabled={jobs.total === 0} />
+          <FailedJobsActionsMenu
+            horizonBaseUrl={horizon.baseUrl}
+            hasFailedJobs={jobs.total > 0}
+            retryable={jobs.retryable}
+          />
         }
       >
         <InfiniteScroll data="jobs" onlyNext buffer={600} loading={<LoadingRows />}>

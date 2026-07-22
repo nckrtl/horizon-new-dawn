@@ -1,14 +1,9 @@
 import { router } from "@inertiajs/react";
-import {
-  CircleXIcon,
-  EllipsisIcon,
-  LoaderCircleIcon,
-  RotateCcwIcon,
-  Trash2Icon,
-} from "lucide-react";
+import { CircleXIcon, LoaderCircleIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ActionMenuTrigger } from "@/components/ui/action-menu-trigger";
 import {
   Dialog,
   DialogClose,
@@ -24,7 +19,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   destroy as stopMonitoring,
@@ -98,21 +92,13 @@ export function MonitoringActionsMenu({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={
-                working ? `Updating monitoring for ${tag}` : `Monitoring actions for ${tag}`
-              }
-              disabled={working !== null}
-            />
-          }
+        <ActionMenuTrigger
+          available
+          label={working ? `Updating monitoring for ${tag}` : `Monitoring actions for ${tag}`}
+          working={working !== null}
         >
-          {working ? <LoaderCircleIcon className="animate-spin" /> : <EllipsisIcon />}
-        </DropdownMenuTrigger>
+          {working ? <LoaderCircleIcon className="animate-spin" /> : undefined}
+        </ActionMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           {(failedCount ?? 0) > 0 || (trackedCount ?? 0) > 0 ? (
             <>

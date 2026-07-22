@@ -68,6 +68,7 @@ describe('failed job pages', function (): void {
                 ->component('FailedJobs/Index')
                 ->where('meta.title', 'Failed Jobs')
                 ->where('meta.activeNavigation', 'failed')
+                ->where('jobs.retryable', true)
                 ->where('jobs.data.0.id', 'failed-1')
                 ->where('jobs.data.0.retried', false)
                 ->where('jobs.data.0.retryEligible', true)
@@ -92,6 +93,54 @@ describe('failed job pages', function (): void {
                 ->where('job.payload.displayName', 'App\\Jobs\\ImportFeed')
                 ->where('job.retryEligible', true)
                 ->where('job.exception', 'sensitive trace'));
+    });
+
+    it('offers individual retry but not retry all after a prior retry failed', function (): void {
+        $job = horizonJob(0, 'failed-1');
+        $job->retried_by = json_encode([
+            ['id' => 'retry-1', 'status' => 'failed'],
+        ], JSON_THROW_ON_ERROR);
+
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturns($repository, 'getFailed', new Collection([$job]));
+        dashboardReturns($repository, 'countFailed', 1);
+        app()->instance(FailedJobsData::class, new FailedJobsData(
+            $repository,
+            mockDashboardContract(TagRepository::class),
+            new JobsData($repository),
+            new FailedJobRetryEligibility,
+        ));
+
+        get('/horizon/failed')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page): AssertableInertia => $page
+                ->where('jobs.total', 1)
+                ->where('jobs.retryable', false)
+                ->where('jobs.data.0.retryEligible', true));
+    });
+
+    it('makes a failed retry independently retryable after its parent was cleared', function (): void {
+        $job = horizonJob(0, 'retry-child');
+        $payload = json_decode($job->payload, true, flags: JSON_THROW_ON_ERROR);
+        $job->payload = json_encode([...$payload, 'retry_of' => 'cleared-parent'], JSON_THROW_ON_ERROR);
+
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturns($repository, 'getFailed', new Collection([$job]));
+        dashboardReturns($repository, 'countFailed', 1);
+        app()->instance(FailedJobsData::class, new FailedJobsData(
+            $repository,
+            mockDashboardContract(TagRepository::class),
+            new JobsData($repository),
+            new FailedJobRetryEligibility,
+        ));
+
+        get('/horizon/failed')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page): AssertableInertia => $page
+                ->where('jobs.retryable', true)
+                ->where('jobs.data.0.id', 'retry-child')
+                ->where('jobs.data.0.retryOf', 'cleared-parent')
+                ->where('jobs.data.0.retryEligible', true));
     });
 
     it('retries one failed job and redirects with feedback', function (): void {

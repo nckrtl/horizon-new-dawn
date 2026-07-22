@@ -9,8 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { show as batchShow } from "@/generated/routes/horizon-new-dawn/batches";
+import { show as failedJobShow } from "@/generated/routes/horizon-new-dawn/failed-jobs";
 import { show as queueShow } from "@/generated/routes/horizon-new-dawn/queues";
 import { useActiveTabQuery } from "@/hooks/use-active-tab-query";
+import { usePageRefresh } from "@/hooks/use-dashboard-refresh";
+import { useAutoLoadPreference } from "@/layouts/horizon-layout";
+import { formatRuntime } from "@/lib/format-duration";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { currentQueryParameter } from "@/lib/url-query";
 import type { JobDetailPageProps } from "@/types/jobs";
@@ -32,6 +36,14 @@ function timestamp(value: number | null) {
 }
 
 function JobShow({ horizon, type, job }: JobDetailPageProps) {
+  const { autoLoad } = useAutoLoadPreference();
+
+  usePageRefresh(horizon.pollInterval, jobRefreshProps, autoLoad);
+
+  const status = jobDetailStatus(type, job);
+  const retryOfUrl = job.retryOf
+    ? resolveHorizonRoute(failedJobShow(job.retryOf), horizon.baseUrl).url
+    : null;
   const batchUrl = job.batchId
     ? resolveHorizonRoute(batchShow(job.batchId), horizon.baseUrl).url
     : null;
@@ -39,8 +51,12 @@ function JobShow({ horizon, type, job }: JobDetailPageProps) {
     queueShow(encodeURIComponent(job.queue)),
     horizon.baseUrl,
   ).url;
+  const waitTime =
+    job.pushedAt !== null && job.reservedAt !== null
+      ? Math.max(0, job.reservedAt - job.pushedAt)
+      : null;
   const details: Array<{ label: string; value: React.ReactNode; identifier?: boolean }> = [
-    { label: "Status", value: <JobStatus status={jobDetailStatus(type, job)} /> },
+    { label: "Status", value: <JobStatus status={status} /> },
     { label: "ID", value: job.id, identifier: true },
     { label: "Connection", value: job.connection },
     {
@@ -56,6 +72,23 @@ function JobShow({ horizon, type, job }: JobDetailPageProps) {
       ),
     },
     { label: "Tries", value: String(job.attempts) },
+    ...(retryOfUrl
+      ? [
+          {
+            label: "Retry of ID",
+            value: (
+              <Link
+                className="text-[13px] text-sm! text-foreground underline decoration-foreground/40 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary"
+                href={retryOfUrl}
+                prefetch
+                title={job.retryOf ?? undefined}
+              >
+                {job.retryOf}
+              </Link>
+            ),
+          },
+        ]
+      : []),
     ...(job.batchId && batchUrl
       ? [
           {
@@ -72,12 +105,27 @@ function JobShow({ horizon, type, job }: JobDetailPageProps) {
           },
         ]
       : []),
-    { label: "Pushed", value: timestamp(job.pushedAt) },
+    { label: "Queued at", value: timestamp(job.pushedAt) },
     ...(job.delayedUntil !== null
       ? [{ label: "Delayed Until", value: timestamp(job.delayedUntil) }]
       : []),
-    { label: "Completed", value: timestamp(job.completedAt) },
-    { label: "Runtime", value: job.runtime === null ? "—" : `${job.runtime.toFixed(2)}s` },
+    ...(job.reservedAt !== null
+      ? [{ label: "Reserved at", value: timestamp(job.reservedAt) }]
+      : []),
+    ...(waitTime !== null ? [{ label: "Wait time", value: formatRuntime(waitTime) }] : []),
+    ...(status === "failed" && job.failedAt !== null
+      ? [{ label: "Failed at", value: timestamp(job.failedAt) }]
+      : []),
+    ...((status === "completed" || status === "silenced") && job.completedAt !== null
+      ? [{ label: "Completed at", value: timestamp(job.completedAt) }]
+      : []),
+    ...(status === "reserved" && job.runtime !== null
+      ? [{ label: "Processing for", value: formatRuntime(job.runtime) }]
+      : []),
+    ...((status === "failed" || status === "completed" || status === "silenced") &&
+    job.runtime !== null
+      ? [{ label: "Runtime", value: formatRuntime(job.runtime) }]
+      : []),
   ];
 
   return (
@@ -90,6 +138,7 @@ function JobShow({ horizon, type, job }: JobDetailPageProps) {
               <span className="truncate" title={job.name}>
                 {job.name}
               </span>
+              {job.retryOf ? <Badge variant="retry">Retry</Badge> : null}
             </CardTitle>
             {type === "pending" && job.status === "pending" && job.batchId === null ? (
               <div className="flex shrink-0 items-center">
@@ -225,5 +274,7 @@ function DetailRow({
     </div>
   );
 }
+
+const jobRefreshProps = ["job"];
 
 export default JobShow;

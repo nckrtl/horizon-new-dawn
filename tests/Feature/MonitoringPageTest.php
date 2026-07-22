@@ -225,13 +225,17 @@ describe('monitoring pages', function (): void {
             ->assertRedirect()
             ->assertSessionHas(
                 'toast.success',
-                'Scheduled 1 failed job tagged customer/42 for retry.',
+                'Scheduled 2 failed jobs tagged customer/42 for retry.',
             );
 
         Bus::assertDispatched(
             HorizonRetryFailedJob::class,
             fn (HorizonRetryFailedJob $job): bool => $job->id === 'failed-1',
         );
-        Bus::assertDispatchedTimes(HorizonRetryFailedJob::class, 1);
+        Bus::assertDispatched(
+            HorizonRetryFailedJob::class,
+            fn (HorizonRetryFailedJob $job): bool => $job->id === 'failed-2',
+        );
+        Bus::assertDispatchedTimes(HorizonRetryFailedJob::class, 2);
     });
 });

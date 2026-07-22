@@ -67,7 +67,6 @@ function QueueShow({ horizon, queue, view, summary, tab, preview, activity }: Qu
           summary={summary}
           activity={activity}
           horizonBaseUrl={horizon.baseUrl}
-          queuePausing={horizon.capabilities?.queuePausing ?? false}
         />
       </div>
     </>

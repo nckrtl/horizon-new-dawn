@@ -2,7 +2,7 @@ import { queryParams, type RouteQueryOptions, type RouteDefinition, applyUrlDefa
 import pending from './pending'
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\JobController::index
-* @see src/Http/Controllers/JobController.php:17
+* @see src/Http/Controllers/JobController.php:18
 * @route '/horizon/jobs/{type}'
 */
 export const index = (args: { type: string | number } | [type: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -17,7 +17,7 @@ index.definition = {
 
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\JobController::index
-* @see src/Http/Controllers/JobController.php:17
+* @see src/Http/Controllers/JobController.php:18
 * @route '/horizon/jobs/{type}'
 */
 index.url = (args: { type: string | number } | [type: string | number ] | string | number, options?: RouteQueryOptions) => {
@@ -44,7 +44,7 @@ index.url = (args: { type: string | number } | [type: string | number ] | string
 
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\JobController::index
-* @see src/Http/Controllers/JobController.php:17
+* @see src/Http/Controllers/JobController.php:18
 * @route '/horizon/jobs/{type}'
 */
 index.get = (args: { type: string | number } | [type: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -54,7 +54,7 @@ index.get = (args: { type: string | number } | [type: string | number ] | string
 
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\JobController::index
-* @see src/Http/Controllers/JobController.php:17
+* @see src/Http/Controllers/JobController.php:18
 * @route '/horizon/jobs/{type}'
 */
 index.head = (args: { type: string | number } | [type: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'head'> => ({
@@ -64,7 +64,7 @@ index.head = (args: { type: string | number } | [type: string | number ] | strin
 
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\JobController::show
-* @see src/Http/Controllers/JobController.php:38
+* @see src/Http/Controllers/JobController.php:42
 * @route '/horizon/jobs/{type}/{job}'
 */
 export const show = (args: { type: string | number, job: string | number } | [type: string | number, job: string | number ], options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -79,7 +79,7 @@ show.definition = {
 
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\JobController::show
-* @see src/Http/Controllers/JobController.php:38
+* @see src/Http/Controllers/JobController.php:42
 * @route '/horizon/jobs/{type}/{job}'
 */
 show.url = (args: { type: string | number, job: string | number } | [type: string | number, job: string | number ], options?: RouteQueryOptions) => {
@@ -105,7 +105,7 @@ show.url = (args: { type: string | number, job: string | number } | [type: strin
 
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\JobController::show
-* @see src/Http/Controllers/JobController.php:38
+* @see src/Http/Controllers/JobController.php:42
 * @route '/horizon/jobs/{type}/{job}'
 */
 show.get = (args: { type: string | number, job: string | number } | [type: string | number, job: string | number ], options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -115,7 +115,7 @@ show.get = (args: { type: string | number, job: string | number } | [type: strin
 
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\JobController::show
-* @see src/Http/Controllers/JobController.php:38
+* @see src/Http/Controllers/JobController.php:42
 * @route '/horizon/jobs/{type}/{job}'
 */
 show.head = (args: { type: string | number, job: string | number } | [type: string | number, job: string | number ], options?: RouteQueryOptions): RouteDefinition<'head'> => ({

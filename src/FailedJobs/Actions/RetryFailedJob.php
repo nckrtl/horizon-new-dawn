@@ -19,9 +19,27 @@ final readonly class RetryFailedJob
 
     public function handle(string $id, ?object $job = null): bool
     {
+        return $this->handleWithPolicy($id, $job, bulk: false);
+    }
+
+    public function handleBulk(string $id, ?object $job = null): bool
+    {
+        return $this->handleWithPolicy($id, $job, bulk: true);
+    }
+
+    private function handleWithPolicy(string $id, ?object $job, bool $bulk): bool
+    {
         $job ??= $this->jobs->findFailed($id);
 
-        if (! is_object($job) || ($job->id ?? null) !== $id || ! $this->eligibility->allows($job)) {
+        if (! is_object($job) || ($job->id ?? null) !== $id) {
+            return false;
+        }
+
+        $allowed = $bulk
+            ? $this->eligibility->allowsBulk($job)
+            : $this->eligibility->allows($job);
+
+        if (! $allowed) {
             return false;
         }
 

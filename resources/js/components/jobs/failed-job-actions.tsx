@@ -1,8 +1,9 @@
 import { router } from "@inertiajs/react";
-import { EllipsisIcon, LoaderCircleIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
+import { LoaderCircleIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ActionMenuTrigger } from "@/components/ui/action-menu-trigger";
 import {
   Dialog,
   DialogClose,
@@ -18,7 +19,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { destroy as removeFailedJob } from "@/generated/routes/horizon-new-dawn/failed-jobs";
 import { destroy as clearAllFailedJobs } from "@/generated/routes/horizon-new-dawn/failed-jobs/clear-all";
@@ -112,10 +112,12 @@ export function RetryAllFailedJobsButton({
 
 export function FailedJobsActionsMenu({
   horizonBaseUrl,
-  disabled,
+  hasFailedJobs,
+  retryable,
 }: {
   horizonBaseUrl: string;
-  disabled: boolean;
+  hasFailedJobs: boolean;
+  retryable: boolean;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -148,22 +150,14 @@ export function FailedJobsActionsMenu({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Failed jobs actions"
-              disabled={working}
-            />
-          }
-        >
-          <EllipsisIcon />
-        </DropdownMenuTrigger>
+        <ActionMenuTrigger
+          available={hasFailedJobs}
+          label="Failed jobs actions"
+          working={working}
+        />
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuGroup>
-            <DropdownMenuItem disabled={disabled} onSelect={retryAll}>
+            <DropdownMenuItem disabled={!retryable} onSelect={retryAll}>
               <RotateCcwIcon className="size-3.5" />
               Retry all
             </DropdownMenuItem>
@@ -172,7 +166,7 @@ export function FailedJobsActionsMenu({
           <DropdownMenuGroup>
             <DropdownMenuItem
               variant="destructive"
-              disabled={disabled}
+              disabled={!hasFailedJobs}
               onSelect={() => setDialogOpen(true)}
             >
               <Trash2Icon />
@@ -249,19 +243,11 @@ export function FailedJobActionsMenu({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={canRetry ? "Retry failed job" : "Remove failed job"}
-              disabled={working}
-            />
-          }
-        >
-          <EllipsisIcon />
-        </DropdownMenuTrigger>
+        <ActionMenuTrigger
+          available
+          label={canRetry ? "Retry failed job" : "Remove failed job"}
+          working={working}
+        />
         <DropdownMenuContent align="end" className="w-44">
           {canRetry ? (
             <>

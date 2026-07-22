@@ -149,6 +149,17 @@ describe('Horizon interface interactions', function (): void {
             ->assertNoConsoleLogs();
     });
 
+    it('shows one batch failure row per retry lineage with total attempts', function (): void {
+        visit('/horizon/batches/batch-1')
+            ->assertSee('Failed Jobs')
+            ->assertSee('Attempts')
+            ->assertSee('3')
+            ->assertPresent('[data-test="batch-failed-job-row"]')
+            ->assertCount('[data-test="batch-failed-job-row"]', 1)
+            ->assertNoJavaScriptErrors()
+            ->assertNoConsoleLogs();
+    });
+
     it('searches failed jobs by exact tag and exposes its filters', function (): void {
         visit('/horizon/failed')
             ->fill('input[aria-label="Filter failed jobs by exact tag"]', 'tenant:missing')

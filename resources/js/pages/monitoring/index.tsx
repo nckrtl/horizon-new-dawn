@@ -1,10 +1,11 @@
 import { Head, useForm } from "@inertiajs/react";
-import { EllipsisIcon, TagIcon } from "lucide-react";
+import { TagIcon } from "lucide-react";
 import { useState } from "react";
 
 import { MonitoredTagsTable } from "@/components/monitoring/monitored-tags-table";
 import { ListPageHeader } from "@/components/shell/list-page-header";
 import { Button } from "@/components/ui/button";
+import { ActionMenuTrigger } from "@/components/ui/action-menu-trigger";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -15,12 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { store as monitorTag } from "@/generated/routes/horizon-new-dawn/monitoring";
@@ -58,13 +54,7 @@ function MonitoringIndex({ horizon, tags }: MonitoringPageProps) {
           title="Monitoring"
           actions={
             <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Monitor Tag" />
-                }
-              >
-                <EllipsisIcon />
-              </DropdownMenuTrigger>
+              <ActionMenuTrigger available label="Monitor Tag" />
               <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuItem onSelect={() => setDialogOpen(true)}>
                   <TagIcon />

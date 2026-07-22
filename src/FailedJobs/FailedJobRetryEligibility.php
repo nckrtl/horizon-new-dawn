@@ -10,51 +10,65 @@ final class FailedJobRetryEligibility
 {
     public function allows(object $job): bool
     {
-        if ($this->isRetry($job->payload ?? null)) {
+        if (! $this->hasValidPayload($job->payload ?? null)) {
             return false;
         }
 
-        return $this->allKnownRetriesFailed($job->retried_by ?? null);
+        $retries = $this->retries($job->retried_by ?? null);
+
+        return $retries !== null && $this->allRetriesFailed($retries);
     }
 
-    private function isRetry(mixed $payload): bool
+    public function allowsBulk(object $job): bool
+    {
+        if (! $this->hasValidPayload($job->payload ?? null)) {
+            return false;
+        }
+
+        return $this->retries($job->retried_by ?? null) === [];
+    }
+
+    private function hasValidPayload(mixed $payload): bool
     {
         if (! is_string($payload) || $payload === '') {
-            return true;
+            return false;
         }
 
         try {
             $decoded = json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
 
-            return ! is_array($decoded) || array_key_exists('retry_of', $decoded);
+            return is_array($decoded);
         } catch (JsonException) {
-            return true;
+            return false;
         }
     }
 
-    private function allKnownRetriesFailed(mixed $retriedBy): bool
+    /** @return array<array-key, mixed>|null */
+    private function retries(mixed $retriedBy): ?array
     {
-        if ($retriedBy === null || $retriedBy === '' || $retriedBy === []) {
-            return true;
+        if ($retriedBy === null || $retriedBy === false || $retriedBy === '' || $retriedBy === []) {
+            return [];
         }
 
         if (is_string($retriedBy)) {
             try {
                 $retriedBy = json_decode($retriedBy, true, flags: JSON_THROW_ON_ERROR);
             } catch (JsonException) {
-                return false;
+                return null;
             }
         }
 
         if (! is_array($retriedBy)) {
-            return false;
+            return null;
         }
 
-        if ($retriedBy === []) {
-            return true;
-        }
+        return $retriedBy;
+    }
 
-        foreach ($retriedBy as $retry) {
+    /** @param array<array-key, mixed> $retries */
+    private function allRetriesFailed(array $retries): bool
+    {
+        foreach ($retries as $retry) {
             if (! is_array($retry) || ($retry['status'] ?? null) !== 'failed') {
                 return false;
             }

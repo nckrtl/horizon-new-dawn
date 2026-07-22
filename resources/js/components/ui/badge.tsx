@@ -17,6 +17,8 @@ const badgeVariants = cva(
           "bg-status-delayed text-status-delayed-foreground focus-visible:ring-status-delayed-foreground/20 [a]:hover:bg-status-delayed/80",
         processing:
           "bg-status-processing text-status-processing-foreground focus-visible:ring-status-processing-foreground/20 [a]:hover:bg-status-processing/80",
+        retry:
+          "bg-status-retry text-status-retry-foreground focus-visible:ring-status-retry-foreground/20 [a]:hover:bg-status-retry/80",
         success:
           "bg-status-running text-status-running-foreground focus-visible:ring-status-running-foreground/20 [a]:hover:bg-status-running/80",
         warning:
