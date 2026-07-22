@@ -136,3 +136,45 @@ jobs:
 
       - name: Verify generated assets
         run: git diff --exit-code -- dist/build resources/js/generated
+
+  auto-release:
+    needs:
+      - compatibility
+      - tests
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Calculate next patch version
+        id: version
+        shell: bash
+        run: |
+          latest="$(git describe --tags --abbrev=0 2>/dev/null || echo 'v0.0.0')"
+          version="${latest#v}"
+          IFS='.' read -r major minor patch <<< "$version"
+          next="v${major}.${minor}.$((patch + 1))"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        env:
+          NEXT_VERSION: ${{ steps.version.outputs.next }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$NEXT_VERSION"
+          git push origin "$NEXT_VERSION"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT_VERSION: ${{ steps.version.outputs.next }}
+        run: gh release create "$NEXT_VERSION" --verify-tag --generate-notes --title "$NEXT_VERSION"
