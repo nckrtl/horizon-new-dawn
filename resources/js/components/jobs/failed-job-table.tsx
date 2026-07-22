@@ -1,0 +1,197 @@
+import { Link, router } from "@inertiajs/react";
+import { RotateCcwIcon, TriangleAlertIcon } from "lucide-react";
+
+import { SortableTableHead } from "@/components/data-table/sortable-table-head";
+import { NewEntriesTableRow } from "@/components/data-table/new-entries-alert";
+import { TableEmpty } from "@/components/data-table/table-empty";
+import { FailedJobActionsMenu } from "@/components/jobs/failed-job-actions";
+import { JobTablePrimaryCell } from "@/components/jobs/job-table-primary-cell";
+import { FailedJobsNavigationIcon } from "@/components/navigation-icons";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { show as failedJobShow } from "@/generated/routes/horizon-new-dawn/failed-jobs";
+import { useSortableRows, type SortColumn } from "@/hooks/use-sortable-rows";
+import { resolveHorizonRoute } from "@/lib/horizon-route";
+import { isInteractiveTarget } from "@/lib/interactive-target";
+import type { JobRow } from "@/types/jobs";
+
+const columns: SortColumn<JobRow>[] = [
+  { key: "name", value: (job) => job.name },
+  { key: "runtime", value: (job) => job.runtime },
+  { key: "failedAt", value: (job) => job.failedAt },
+];
+const dateFormatter = new Intl.DateTimeFormat("sv-SE", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+function formatTimestamp(timestamp: number | null) {
+  return timestamp === null ? "—" : dateFormatter.format(timestamp * 1000);
+}
+
+function directionFor(key: string, sort: { key: string; direction: "asc" | "desc" } | null) {
+  return sort?.key === key ? sort.direction : undefined;
+}
+
+function upperFirst(value: string | null) {
+  return value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : "Unknown";
+}
+
+export function FailedJobTable({
+  jobs,
+  horizonBaseUrl,
+  available = true,
+  message = null,
+  hasNewEntries = false,
+  onLoadNewEntries,
+  emptyTitle,
+  emptyDescription,
+}: {
+  jobs: readonly JobRow[];
+  horizonBaseUrl: string;
+  available?: boolean;
+  message?: string | null;
+  hasNewEntries?: boolean;
+  onLoadNewEntries?: () => void;
+  emptyTitle?: string;
+  emptyDescription?: string;
+}) {
+  const sorted = useSortableRows(jobs, columns, { persist: true });
+
+  if (!available) {
+    return (
+      <Alert variant="destructive" className="m-4">
+        <TriangleAlertIcon aria-hidden="true" />
+        <AlertTitle>Failed jobs unavailable</AlertTitle>
+        <AlertDescription>{message ?? "Failed jobs are currently unavailable."}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  return (
+    <Table>
+      <TableHeader className="sticky top-0 z-10">
+        <TableRow>
+          <SortableTableHead
+            label="Job"
+            columnKey="name"
+            direction={directionFor("name", sorted.sort)}
+            onSort={sorted.toggle}
+            className="px-4 sm:px-6"
+          />
+          <SortableTableHead
+            label="Runtime"
+            columnKey="runtime"
+            direction={directionFor("runtime", sorted.sort)}
+            onSort={sorted.toggle}
+            className="w-[100px] px-4 text-right sm:px-6"
+          />
+          <SortableTableHead
+            label="Failed"
+            columnKey="failedAt"
+            direction={directionFor("failedAt", sorted.sort)}
+            onSort={sorted.toggle}
+            className="w-[190px] px-4 sm:px-6"
+          />
+          <SortableTableHead label="Actions" className="w-[80px] px-4 text-right sm:px-6" />
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {hasNewEntries && onLoadNewEntries ? (
+          <NewEntriesTableRow columns={4} onLoad={onLoadNewEntries} />
+        ) : null}
+        {sorted.rows.length === 0 ? (
+          <TableEmpty
+            columns={4}
+            title={emptyTitle ?? "No failed jobs"}
+            description={emptyDescription ?? "There aren't any failed jobs."}
+            icon={FailedJobsNavigationIcon}
+          />
+        ) : null}
+        {sorted.rows.map((job) => {
+          const detailUrl = resolveHorizonRoute(failedJobShow(job.id), horizonBaseUrl).url;
+          const retryOfUrl = job.retryOf
+            ? resolveHorizonRoute(failedJobShow(job.retryOf), horizonBaseUrl).url
+            : null;
+
+          return (
+            <TableRow
+              className="cursor-pointer"
+              key={job.id}
+              onClick={(event) => {
+                if (isInteractiveTarget(event.target)) {
+                  return;
+                }
+
+                router.visit(detailUrl);
+              }}
+              onMouseEnter={() => router.prefetch(detailUrl)}
+            >
+              <JobTablePrimaryCell
+                name={job.shortName}
+                fullName={job.name}
+                queue={job.queue}
+                tags={job.tags}
+                href={detailUrl}
+                className="px-4 sm:px-6"
+                accessory={
+                  job.retried ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-[11.5px] font-medium text-muted-foreground"
+                            title={`Total retries: ${job.retryCount}, Last retry status: ${upperFirst(job.latestRetryStatus)}`}
+                          />
+                        }
+                      >
+                        <RotateCcwIcon className="size-[11px]" /> Retried
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Total retries: {job.retryCount}, Last retry status:{" "}
+                        {upperFirst(job.latestRetryStatus)}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : undefined
+                }
+                details={
+                  <>
+                    <span>Attempts: {job.attempts}</span>
+                    {retryOfUrl ? (
+                      <span>
+                        Retry of{" "}
+                        <Link href={retryOfUrl} prefetch>
+                          {job.retryOf}
+                        </Link>
+                      </span>
+                    ) : null}
+                  </>
+                }
+              />
+              <TableCell className="px-4 text-right tabular-nums text-muted-foreground sm:px-6">
+                {job.runtime === null ? "—" : `${job.runtime.toFixed(2)}s`}
+              </TableCell>
+              <TableCell className="px-4 text-muted-foreground sm:px-6">
+                {formatTimestamp(job.failedAt)}
+              </TableCell>
+              <TableCell className="px-4 text-right sm:px-6">
+                <FailedJobActionsMenu
+                  jobId={job.id}
+                  horizonBaseUrl={horizonBaseUrl}
+                  canRetry={job.retryEligible}
+                />
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}

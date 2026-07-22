@@ -1,0 +1,4 @@
+interface:
+  display_name: "Check Horizon Compatibility"
+  short_description: "Audit Laravel, Horizon, PHP, and UI feature compatibility"
+  default_prompt: "Use $checking-horizon-compatibility to verify this Horizon New Dawn feature across every declared Laravel, Horizon, PHP, backend, and UI boundary."

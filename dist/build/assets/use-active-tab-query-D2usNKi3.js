@@ -1,0 +1,1 @@
+import{d as e,lt as t}from"./dist-D_MlR5t0.js";import{n}from"./url-query-DN12_5BO.js";var r=t(e(),1);function i(e){(0,r.useEffect)(()=>{let t=()=>n({tab:e}),r=window.setTimeout(t,0);return document.addEventListener(`inertia:navigate`,t),()=>{window.clearTimeout(r),document.removeEventListener(`inertia:navigate`,t)}},[e])}export{i as t};

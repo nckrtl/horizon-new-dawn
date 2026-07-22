@@ -1,0 +1,86 @@
+{
+    "name": "nckrtl/horizon-new-dawn",
+    "description": "A React and Inertia interface for Laravel Horizon.",
+    "keywords": [
+        "dashboard",
+        "horizon",
+        "inertia",
+        "laravel",
+        "queues",
+        "react"
+    ],
+    "homepage": "https://github.com/nckrtl/horizon-new-dawn",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Nick Retel",
+            "email": "nick.retel@gmail.com",
+            "homepage": "https://github.com/nckrtl",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "inertiajs/inertia-laravel": "^3.1",
+        "laravel/framework": "^11.0|^12.0|^13.0",
+        "laravel/horizon": "^5.48.1",
+        "spatie/laravel-data": "^4.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/boost": "^2.4",
+        "laravel/pint": "^1.0",
+        "laravel/wayfinder": "^0.1.20",
+        "mockery/mockery": "^1.6",
+        "orchestra/testbench": "^9.0|^10.0|^11.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-browser": "^4.3",
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "predis/predis": "^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "NckRtl\\HorizonNewDawn\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "NckRtl\\HorizonNewDawn\\Tests\\": "tests/",
+            "Workbench\\App\\": "workbench/app/",
+            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "NckRtl\\HorizonNewDawn\\HorizonNewDawnServiceProvider"
+            ]
+        }
+    },
+    "support": {
+        "issues": "https://github.com/nckrtl/horizon-new-dawn/issues",
+        "source": "https://github.com/nckrtl/horizon-new-dawn"
+    },
+    "scripts": {
+        "analyse": "@php -d memory_limit=1G vendor/bin/phpstan analyse",
+        "format": "vendor/bin/pint",
+        "format:test": "vendor/bin/pint --test",
+        "test": "vendor/bin/pest --testsuite=Package",
+        "test:browser": "vendor/bin/pest --testsuite=Browser",
+        "quality": [
+            "@format:test",
+            "@analyse",
+            "@test",
+            "@test:browser"
+        ]
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

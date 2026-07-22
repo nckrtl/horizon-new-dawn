@@ -1,0 +1,7 @@
+interface:
+  display_name: "Review Horizon Interface"
+  short_description: "Audit Horizon UI fidelity and usability"
+  default_prompt: "Use $reviewing-horizon-interface to review the Horizon New Dawn interface against its design and project rules."
+
+policy:
+  allow_implicit_invocation: true

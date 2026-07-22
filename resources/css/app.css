@@ -1,0 +1,312 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/instrument-sans";
+@import "@fontsource/jetbrains-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-error: var(--error);
+  --color-panel-top: var(--panel-top);
+  --color-panel-border: var(--panel-border);
+  --color-card-hover: var(--card-hover);
+  --color-table-row-hover: var(--table-row-hover);
+  --color-table-row-action-hover: var(--table-row-action-hover);
+  --color-new-entries-foreground: var(--new-entries-foreground);
+  --color-dropdown-item-hover: var(--dropdown-item-hover);
+  --color-thead: var(--thead);
+  --color-th: var(--th-bg);
+  --color-separator: var(--separator);
+  --color-code: var(--code-bg);
+  --color-code-foreground: var(--code-fg);
+  --color-primary-hover: var(--primary-hover);
+  --color-action-primary-hover: var(--action-primary-hover);
+  --color-action-primary: var(--action-primary);
+  --color-action-retry: var(--action-retry);
+  --color-nav-top: var(--nav-top);
+  --color-status-running: var(--status-running);
+  --color-status-running-foreground: var(--status-running-foreground);
+  --color-status-delayed: var(--status-delayed);
+  --color-status-delayed-foreground: var(--status-delayed-foreground);
+  --color-status-processing: var(--status-processing);
+  --color-status-processing-foreground: var(--status-processing-foreground);
+  --color-status-paused: var(--status-paused);
+  --color-status-paused-foreground: var(--status-paused-foreground);
+  --color-status-inactive: var(--status-inactive);
+  --color-status-unavailable: var(--status-unavailable);
+  --color-status-unavailable-foreground: var(--status-unavailable-foreground);
+  --color-status-success-icon: var(--status-success-icon);
+  --color-status-warning-icon: var(--status-warning-icon);
+  --color-status-processing-icon: var(--status-processing-icon);
+  --color-status-destructive-icon: var(--status-destructive-icon);
+  --color-status-idle: var(--status-idle);
+  --color-status-working: var(--status-working);
+  --color-chart-grid: var(--chart-grid);
+  --font-heading: var(--font-sans);
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-weight-normal: 450;
+  --font-weight-semibold: 500;
+  --font-weight-bold: 500;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-action: var(--destructive-action);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --shadow-panel: var(--panel-shadow);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: #f9f9fa;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-hover: color-mix(in oklab, var(--card) 50%, var(--thead) 50%);
+  --table-row-hover: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--primary) 20%, var(--card) 92%) 25%,
+    var(--card)
+  );
+  --table-row-action-hover: color-mix(in oklab, var(--table-row-hover) 90%, var(--primary) 10%);
+  --new-entries-foreground: var(--primary);
+  --new-entries-layer-opacity: 0.1;
+  --new-entries-stripe: oklch(from var(--primary) calc(l - 0.13) c h);
+  --dropdown-item-hover: color-mix(in oklab, var(--primary) 8%, var(--popover));
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #7746ec;
+  --primary-hover: #8659ef;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #efeff1;
+  --accent-foreground: #18181b;
+  --destructive: #b91c1c;
+  --destructive-action: var(--color-red-600);
+  --border: #e4e4e7;
+  --input: #e9e9ec;
+  --ring: #7746ec;
+  --chart-1: #7746ec;
+  --chart-2: #16a34a;
+  --chart-3: #d97706;
+  --chart-4: #71717a;
+  --chart-5: #c026d3;
+  --radius: 0.625rem;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #18181b;
+  --sidebar-primary: #7746ec;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #efeff1;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #7746ec;
+  --panel-top: #e9e9ec;
+  --panel-border: #e9e9ec;
+  --thead: #fafafa;
+  --th-bg: color-mix(in oklab, var(--muted) 60%, var(--card) 40%);
+  --separator: #eeeef0;
+  --ok: #15803d;
+  --warn: #a16207;
+  --error: #b91c1c;
+  --code-bg: #f4f4f5;
+  --code-fg: #383a42;
+  --code-key: #a626a4;
+  --code-string: #50a14f;
+  --code-punctuation: #0184bc;
+  --code-number: #986801;
+  --code-muted: #a0a1a7;
+  --code-error: #ca1243;
+  --action-primary: #7746ec;
+  --action-primary-hover: #8659ef;
+  --action-primary-highlight: #8054ed;
+  --action-retry: #3b82f6;
+  --nav-top: transparent;
+  --status-running: #dcfce7;
+  --status-running-foreground: var(--ok);
+  --status-delayed: #fef9c3;
+  --status-delayed-foreground: var(--warn);
+  --status-processing: #dbeafe;
+  --status-processing-foreground: #1d4ed8;
+  --status-paused: #ffedd5;
+  --status-paused-foreground: #9a3412;
+  --status-inactive: #3f3f46;
+  --status-unavailable: #fee2e2;
+  --status-unavailable-foreground: var(--destructive);
+  --status-success-icon: var(--color-green-500);
+  --status-warning-icon: var(--color-yellow-500);
+  --status-processing-icon: var(--color-blue-500);
+  --status-destructive-icon: var(--color-red-500);
+  --status-idle: var(--primary);
+  --status-idle-track: #e4e4e7;
+  --status-working: var(--primary);
+  --status-working-track: color-mix(in oklab, var(--primary) 20%, var(--background) 80%);
+  --chart-grid: color-mix(in oklab, var(--border) 70%, transparent);
+  --panel-shadow: 0 1px 6px rgb(0 0 0 / 4%), 0 1px 4px -1px rgb(0 0 0 / 4%);
+}
+
+.dark {
+  --background: #111827;
+  --foreground: #f3f4f6;
+  --card: #1f2937;
+  --table-row-hover: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--primary) 60%, var(--white) 40%) 6.25%,
+    var(--card) 93.75%
+  );
+  --card-foreground: #f3f4f6;
+  --popover: #1f2937;
+  --popover-foreground: #f3f4f6;
+  --primary: #a78bfa;
+  --primary-hover: #b59cfb;
+  --primary-foreground: #ffffff;
+  --new-entries-foreground: var(--primary-foreground);
+  --new-entries-layer-opacity: 0.3;
+  --new-entries-stripe: oklch(from var(--primary) calc(l - 0.06) c h);
+  --secondary: #374151;
+  --secondary-foreground: #f3f4f6;
+  --muted: #374151;
+  --muted-foreground: #9ca3af;
+  --accent: #1f2937;
+  --accent-foreground: #f3f4f6;
+  --destructive: color-mix(in oklab, var(--color-red-400) 70%, var(--color-red-300) 30%);
+  --destructive-action: var(--destructive);
+  --border: #374151;
+  --input: #374151;
+  --ring: #a78bfa;
+  --chart-1: #a78bfa;
+  --chart-2: #4ade80;
+  --chart-3: #fbbf24;
+  --chart-4: #9ca3af;
+  --chart-5: #e879f9;
+  --sidebar: #111827;
+  --sidebar-foreground: #f3f4f6;
+  --sidebar-primary: #a78bfa;
+  --sidebar-primary-foreground: #111827;
+  --sidebar-accent: #1f2937;
+  --sidebar-accent-foreground: #f3f4f6;
+  --sidebar-border: #1f2937;
+  --sidebar-ring: #a78bfa;
+  --panel-top: #2b3544;
+  --panel-border: transparent;
+  --thead: #2b3544;
+  --th-bg: #252f3e;
+  --separator: #2b3544;
+  --ok: var(--color-green-400);
+  --warn: var(--color-yellow-400);
+  --error: #fca5a5;
+  --action-primary: #7746ec;
+  --action-primary-hover: #8659ef;
+  --action-primary-highlight: #8054ed;
+  --nav-top: #2b3544;
+  --status-running: color-mix(in oklab, var(--color-green-900) 70%, var(--card) 30%);
+  --status-running-foreground: var(--ok);
+  --status-delayed: color-mix(in oklab, var(--color-yellow-900) 70%, var(--card) 30%);
+  --status-delayed-foreground: var(--warn);
+  --status-processing: color-mix(in oklab, var(--color-blue-900) 70%, var(--card) 30%);
+  --status-processing-foreground: var(--color-blue-400);
+  --status-paused: color-mix(in oklab, var(--color-orange-900) 70%, var(--card) 30%);
+  --status-paused-foreground: var(--color-orange-400);
+  --status-inactive: color-mix(in oklab, var(--background) 60%, var(--foreground) 40%);
+  --status-unavailable: color-mix(in oklab, var(--color-red-900) 70%, var(--card) 30%);
+  --status-unavailable-foreground: var(--destructive);
+  --status-success-icon: var(--status-running-foreground);
+  --status-warning-icon: var(--status-delayed-foreground);
+  --status-processing-icon: var(--status-processing-foreground);
+  --status-destructive-icon: var(--status-unavailable-foreground);
+  --status-idle: var(--primary);
+  --status-idle-track: color-mix(in oklab, var(--background) 80%, var(--foreground) 20%);
+  --status-working: var(--primary);
+  --status-working-track: color-mix(in oklab, var(--primary) 25%, var(--background) 75%);
+  --chart-grid: color-mix(in oklab, var(--border) 50%, transparent);
+  --panel-shadow: 0 1px 3px rgb(0 0 0 / 10%), 0 1px 2px -1px rgb(0 0 0 / 10%);
+  --white: #fff;
+}
+
+.dark,
+[data-code-theme="dark"] {
+  --code-bg: #18202d;
+  --code-fg: #a6accd;
+  --code-key: #c792ea;
+  --code-string: #c3e88d;
+  --code-punctuation: #89ddff;
+  --code-number: #f78c6c;
+  --code-muted: #7681a8;
+  --code-error: #f07178;
+}
+
+@keyframes horizon-status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@utility animate-horizon-status {
+  animation: horizon-status-spin 2.5s linear infinite;
+}
+
+@utility animate-horizon-status-working {
+  animation: horizon-status-spin 0.32s linear infinite;
+}
+
+@utility shadow-action {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 5%),
+    inset 0 1px 0 var(--action-primary-highlight);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+  }
+
+  body {
+    @apply min-h-svh bg-background font-normal text-foreground antialiased tabular-nums;
+  }
+
+  ::selection {
+    @apply bg-primary text-primary-foreground;
+  }
+}

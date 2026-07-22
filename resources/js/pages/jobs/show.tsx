@@ -1,0 +1,229 @@
+import { Head, Link } from "@inertiajs/react";
+import { useState } from "react";
+
+import { JobStatus, type JobStatusValue } from "@/components/jobs/job-status";
+import { PendingJobActionsMenu } from "@/components/jobs/pending-job-actions";
+import { JobTags } from "@/components/jobs/job-tags";
+import { JsonPayload } from "@/components/payload/json-payload";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { show as batchShow } from "@/generated/routes/horizon-new-dawn/batches";
+import { show as queueShow } from "@/generated/routes/horizon-new-dawn/queues";
+import { useActiveTabQuery } from "@/hooks/use-active-tab-query";
+import { resolveHorizonRoute } from "@/lib/horizon-route";
+import { currentQueryParameter } from "@/lib/url-query";
+import type { JobDetailPageProps } from "@/types/jobs";
+
+type JobDataTab = "data" | "tags";
+
+const dateFormatter = new Intl.DateTimeFormat("sv-SE", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+function timestamp(value: number | null) {
+  return value === null ? "—" : dateFormatter.format(value * 1000);
+}
+
+function JobShow({ horizon, type, job }: JobDetailPageProps) {
+  const batchUrl = job.batchId
+    ? resolveHorizonRoute(batchShow(job.batchId), horizon.baseUrl).url
+    : null;
+  const queueUrl = resolveHorizonRoute(
+    queueShow(encodeURIComponent(job.queue)),
+    horizon.baseUrl,
+  ).url;
+  const details: Array<{ label: string; value: React.ReactNode; identifier?: boolean }> = [
+    { label: "Status", value: <JobStatus status={jobDetailStatus(type, job)} /> },
+    { label: "ID", value: job.id, identifier: true },
+    { label: "Connection", value: job.connection },
+    {
+      label: "Queue",
+      value: (
+        <Link
+          className="text-foreground underline decoration-foreground/40 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary"
+          href={queueUrl}
+          prefetch
+        >
+          {job.queue}
+        </Link>
+      ),
+    },
+    { label: "Tries", value: String(job.attempts) },
+    ...(job.batchId && batchUrl
+      ? [
+          {
+            label: "Batch",
+            value: (
+              <Link
+                className="text-[13px] text-sm! text-foreground underline decoration-foreground/40 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary"
+                href={batchUrl}
+                prefetch
+              >
+                {job.batchId}
+              </Link>
+            ),
+          },
+        ]
+      : []),
+    { label: "Pushed", value: timestamp(job.pushedAt) },
+    ...(job.delayedUntil !== null
+      ? [{ label: "Delayed Until", value: timestamp(job.delayedUntil) }]
+      : []),
+    { label: "Completed", value: timestamp(job.completedAt) },
+    { label: "Runtime", value: job.runtime === null ? "—" : `${job.runtime.toFixed(2)}s` },
+  ];
+
+  return (
+    <>
+      <Head title="Job Detail" />
+      <div className="flex flex-col gap-3.5">
+        <Card>
+          <CardHeader className="flex h-[54px] flex-row justify-between gap-4 px-6 py-0">
+            <CardTitle className="flex min-w-0 items-center gap-2">
+              <span className="truncate" title={job.name}>
+                {job.name}
+              </span>
+            </CardTitle>
+            {type === "pending" && job.status === "pending" && job.batchId === null ? (
+              <div className="flex shrink-0 items-center">
+                <PendingJobActionsMenu jobId={job.id} horizonBaseUrl={horizon.baseUrl} />
+              </div>
+            ) : null}
+          </CardHeader>
+          <CardContent className="p-0">
+            <dl className="pt-1.5 pb-2.5">
+              {details.map((detail, index) => (
+                <DetailRow key={detail.label} detail={detail} bordered={index > 0} />
+              ))}
+            </dl>
+          </CardContent>
+        </Card>
+
+        <JobDataTabs payload={job.payload} tags={job.tags} />
+      </div>
+    </>
+  );
+}
+
+function jobDetailStatus(
+  type: JobDetailPageProps["type"],
+  job: JobDetailPageProps["job"],
+): JobStatusValue {
+  if (job.status === "completed") {
+    return type === "silenced" ? "silenced" : "completed";
+  }
+
+  if (job.status === "failed") {
+    return "failed";
+  }
+
+  if (job.status === "reserved") {
+    return "reserved";
+  }
+
+  if (type === "completed") {
+    return "completed";
+  }
+
+  if (type === "silenced") {
+    return "silenced";
+  }
+
+  return job.delayedUntil !== null ? "delayed" : "ready";
+}
+
+function JobDataTabs({
+  payload,
+  tags,
+}: {
+  payload: Record<string, unknown>;
+  tags: readonly string[];
+}) {
+  const [activeTab, setActiveTab] = useState<JobDataTab>(initialJobDataTab);
+
+  useActiveTabQuery(activeTab);
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as JobDataTab)}
+          className="gap-0"
+        >
+          <div className="border-b border-separator">
+            <TabsList
+              variant="line"
+              aria-label="Job data"
+              className="max-w-full justify-start gap-2 overflow-x-auto rounded-none px-3 py-0"
+            >
+              <TabsTrigger
+                value="data"
+                className="h-auto flex-none rounded-none px-3 py-4 text-[13.5px]"
+              >
+                Data
+              </TabsTrigger>
+              <TabsTrigger
+                value="tags"
+                className="h-auto flex-none rounded-none px-3 py-4 text-[13.5px]"
+              >
+                Tags
+                <Badge className="h-4 min-w-4 px-1.5 text-[10.5px]" variant="secondary">
+                  {tags.length}
+                </Badge>
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="data" className="mt-0">
+            <JsonPayload value={payload} />
+          </TabsContent>
+          <TabsContent value="tags" className="mt-0 px-6 py-4">
+            <JobTags tags={tags} />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+}
+
+function initialJobDataTab(): JobDataTab {
+  return currentQueryParameter("tab") === "tags" ? "tags" : "data";
+}
+
+function DetailRow({
+  detail,
+  bordered,
+}: {
+  detail: { label: string; value: React.ReactNode; identifier?: boolean };
+  bordered: boolean;
+}) {
+  const title = typeof detail.value === "string" ? detail.value : undefined;
+
+  return (
+    <div
+      className={
+        bordered
+          ? "flex gap-4 border-t border-dashed border-separator px-6 py-2.5"
+          : "flex gap-4 px-6 py-2.5"
+      }
+    >
+      <dt className="w-40 shrink-0 text-muted-foreground">{detail.label}</dt>
+      <dd
+        className={`min-w-0 break-all ${detail.identifier ? "text-[13px] text-sm!" : ""}`}
+        title={title}
+      >
+        {detail.value}
+      </dd>
+    </div>
+  );
+}
+
+export default JobShow;

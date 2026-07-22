@@ -1,0 +1,54 @@
+name: Bug report
+description: Report reproducible behavior in Horizon New Dawn.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Horizon New Dawn. Please test against the latest release before reporting an issue. For security vulnerabilities, use the private reporting link in SECURITY.md.
+  - type: input
+    id: package-version
+    attributes:
+      label: Horizon New Dawn version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include PHP, Laravel, Horizon, Redis client, browser, and operating system versions where relevant.
+      placeholder: PHP 8.5, Laravel 13.x, Horizon 5.x, phpredis, Chrome, macOS
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the complete exception or browser error when available. Remove secrets and personal data.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest sequence that consistently reproduces the problem.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I reproduced this with the latest release.
+          required: true
+        - label: I confirmed this is not a security vulnerability.
+          required: true

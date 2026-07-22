@@ -1,0 +1,40 @@
+laravel: '@testbench'
+
+env:
+  APP_ENV: local
+  CACHE_STORE: redis
+  DB_CONNECTION: sqlite
+  QUEUE_CONNECTION: redis
+  REDIS_CLIENT: predis
+  HORIZON_PREFIX: horizon_new_dawn
+
+providers:
+  - Inertia\ServiceProvider
+  - Spatie\LaravelData\LaravelDataServiceProvider
+  - Laravel\Horizon\HorizonServiceProvider
+  - NckRtl\HorizonNewDawn\HorizonNewDawnServiceProvider
+  - Workbench\App\Providers\WorkbenchServiceProvider
+
+migrations: []
+
+seeders:
+  - Workbench\Database\Seeders\DatabaseSeeder
+
+workbench:
+  start: '/horizon'
+  install: true
+  health: false
+  discovers:
+    web: true
+    api: false
+    commands: false
+    components: false
+    factories: false
+    views: false
+  build:
+    - create-sqlite-db
+    - horizon-new-dawn-install:
+        --force: true
+    - migrate-fresh:
+        --seed: true
+        --seeder: Workbench\Database\Seeders\DatabaseSeeder

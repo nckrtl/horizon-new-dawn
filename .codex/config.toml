@@ -1,0 +1,4 @@
+[mcp_servers.laravel-boost]
+command = "php"
+args = ["vendor/bin/testbench", "boost:mcp"]
+env = { APP_BASE_PATH = ".", APP_ENV = "local", VIEW_COMPILED_PATH = "bootstrap/cache" }

@@ -1,0 +1,16 @@
+/.phpunit.cache
+/.phpunit.result.cache
+/.phpstan.cache
+/node_modules
+/vendor
+/tests/Browser/Screenshots
+/.idea
+/.vscode
+/.zed/
+/.grok/
+/.cursor/
+.DS_Store
+.env
+/.ds-sync/
+/ds-bundle/
+/.design-sync/

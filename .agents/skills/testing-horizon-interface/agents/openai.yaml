@@ -1,0 +1,4 @@
+interface:
+  display_name: "Testing the Horizon Interface"
+  short_description: "Browser acceptance for every UI feature"
+  default_prompt: "Use $testing-horizon-interface to add complete test coverage for this Horizon UI feature."

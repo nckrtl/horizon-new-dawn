@@ -1,0 +1,7 @@
+interface:
+  display_name: "Optimize Horizon React"
+  short_description: "Review Inertia React client performance"
+  default_prompt: "Use $optimizing-horizon-react to review Horizon New Dawn React code for client performance and Inertia correctness."
+
+policy:
+  allow_implicit_invocation: true
