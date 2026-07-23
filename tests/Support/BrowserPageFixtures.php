@@ -162,6 +162,7 @@ function bindBrowserPageFixtures(): void
     dashboardReturns($metrics, 'throughputForQueue', 0);
     dashboardReturns($metrics, 'runtimeForJob', 1500);
     dashboardReturns($metrics, 'runtimeForQueue', 2000);
+    app()->instance(MetricsRepository::class, $metrics);
     app()->instance(MetricsData::class, new MetricsData($metrics));
 
     $batch = horizonBatch(
