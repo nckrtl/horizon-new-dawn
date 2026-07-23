@@ -7,7 +7,9 @@ namespace NckRtl\HorizonNewDawn\Jobs\Actions;
 use Illuminate\Queue\QueueManager;
 use Illuminate\Queue\RedisQueue;
 use Illuminate\Redis\Connections\Connection as RedisConnection;
+use Illuminate\Redis\Connections\PhpRedisClusterConnection;
 use Illuminate\Redis\Connections\PhpRedisConnection;
+use Illuminate\Redis\Connections\PredisClusterConnection;
 use Laravel\Horizon\Contracts\JobRepository;
 use NckRtl\HorizonNewDawn\Jobs\ForgetsPendingJob;
 use NckRtl\HorizonNewDawn\Jobs\PendingJobCancellationResult;
@@ -72,7 +74,7 @@ final readonly class CancelPendingJob
         PendingJobCancellationScope $scope,
     ): bool {
         $redis = $queue->getConnection();
-        $clusterQueueName = $redis->isCluster() && ! $this->hasHashTag($queueName)
+        $clusterQueueName = $this->isCluster($redis) && ! $this->hasHashTag($queueName)
             ? '{'.$queueName.'}'
             : $queueName;
         $ready = $queue->getQueue($clusterQueueName);
@@ -119,6 +121,16 @@ final readonly class CancelPendingJob
         $close = strpos($key, '}', $open + 1);
 
         return $close !== false && $close - $open > 1;
+    }
+
+    private function isCluster(RedisConnection $redis): bool
+    {
+        if (in_array('isCluster', get_class_methods($redis), true)) {
+            return $redis->isCluster();
+        }
+
+        return $redis instanceof PhpRedisClusterConnection ||
+            $redis instanceof PredisClusterConnection;
     }
 
     private function evaluate(

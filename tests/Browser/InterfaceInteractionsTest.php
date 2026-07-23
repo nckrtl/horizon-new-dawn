@@ -74,6 +74,8 @@ describe('Horizon interface interactions', function (): void {
             $page->click('[aria-label="Auto load new entries"]');
         }
 
+        $page->assertPresent('[data-scaling-state="up"]');
+
         $meters = $page->script(<<<'JS'
             () => {
                 const meters = {}
