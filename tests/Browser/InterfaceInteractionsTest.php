@@ -65,44 +65,21 @@ describe('Horizon interface interactions', function (): void {
     it('keeps predicted autoscaling active until the process count reaches its target', function (): void {
         bindBrowserSupervisorScalingFixtures();
 
-        $page = visit('/horizon/instances')->assertSee('Instances');
-        $autoRefreshWasEnabled = $page->script(<<<'JS'
-            () => new Promise((resolve, reject) => {
-                const toggle = document.querySelector('[aria-label="Auto load new entries"]')
-                const wasEnabled = toggle?.getAttribute('aria-pressed') === 'true'
-                const timeout = window.setTimeout(
-                    () => finish(new Error('Timed out waiting for the scaling indicator to render.')),
-                    3000,
-                )
-                const observer = new MutationObserver(inspect)
+        $page = visit('/horizon');
+        $autoRefreshWasEnabled = $page->script(
+            '() => document.querySelector(\'[aria-label="Auto load new entries"]\')?.getAttribute("aria-pressed") === "true"',
+        );
 
-                function finish(error = null) {
-                    window.clearTimeout(timeout)
-                    observer.disconnect()
+        if (! $autoRefreshWasEnabled) {
+            $page
+                ->click('[aria-label="Auto load new entries"]')
+                ->assertAttribute('[aria-label="Auto load new entries"]', 'aria-pressed', 'true');
+        }
 
-                    if (error) {
-                        reject(error)
-                        return
-                    }
-
-                    resolve(wasEnabled)
-                }
-
-                function inspect() {
-                    if (document.querySelector('[data-scaling-state="up"]')) {
-                        finish()
-                    }
-                }
-
-                observer.observe(document.body, { childList: true, subtree: true })
-
-                if (! wasEnabled) {
-                    toggle?.click()
-                }
-
-                inspect()
-            })
-        JS);
+        $page
+            ->click('Instances')
+            ->assertPathIs('/horizon/instances')
+            ->assertPresent('[data-scaling-state="up"]');
 
         $meters = $page->script(<<<'JS'
             () => {
