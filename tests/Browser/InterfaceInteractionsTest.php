@@ -65,20 +65,20 @@ describe('Horizon interface interactions', function (): void {
     it('keeps predicted autoscaling active until the process count reaches its target', function (): void {
         bindBrowserSupervisorScalingFixtures();
 
-        $page = visit('/horizon');
+        $page = visit('/horizon/instances')->assertSee('Instances');
         $autoRefreshWasEnabled = $page->script(
-            '() => document.querySelector(\'[aria-label="Auto load new entries"]\')?.getAttribute("aria-pressed") === "true"',
+            '() => localStorage.getItem("horizonAutoLoadsNewEntries") === "1"',
         );
 
         if (! $autoRefreshWasEnabled) {
-            $page
-                ->click('[aria-label="Auto load new entries"]')
-                ->assertAttribute('[aria-label="Auto load new entries"]', 'aria-pressed', 'true');
+            $page->script(
+                '() => localStorage.setItem("horizonAutoLoadsNewEntries", "1")',
+            );
+            $page->refresh();
         }
 
         $page
-            ->navigate('/horizon/instances')
-            ->assertPathIs('/horizon/instances')
+            ->assertAttribute('[aria-label="Auto load new entries"]', 'aria-pressed', 'true')
             ->assertPresent('[data-scaling-state="up"]');
 
         $meters = $page->script(<<<'JS'
