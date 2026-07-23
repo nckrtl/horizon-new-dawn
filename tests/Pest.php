@@ -13,7 +13,7 @@ require_once __DIR__.'/Support/BrowserPageFixtures.php';
 require_once __DIR__.'/Support/HorizonBatches.php';
 require_once __DIR__.'/Support/HorizonJobs.php';
 
-pest()->extend(TestCase::class)->in('Feature', 'Unit');
+pest()->extend(TestCase::class)->in('Compatibility', 'Feature', 'Unit');
 pest()->extend(BrowserTestCase::class)->in('Browser');
 
 function queuePausingIsSupported(): bool

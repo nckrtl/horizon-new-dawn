@@ -55,8 +55,7 @@ describe('Horizon controller replacement', function (): void {
         dashboardReturns($jobs, 'countPending', 5);
 
         $metrics = mockDashboardContract(MetricsRepository::class);
-        dashboardReturns($metrics, 'queueWithMaximumRuntime', 'default');
-        dashboardReturns($metrics, 'queueWithMaximumThroughput', 'default');
+        dashboardReturns($metrics, 'measuredQueues', ['default']);
 
         $supervisors = mockDashboardContract(SupervisorRepository::class);
         dashboardReturns($supervisors, 'all', [
@@ -107,6 +106,12 @@ describe('Horizon controller replacement', function (): void {
 
         $connection = mockDashboardContract(Connection::class);
         dashboardReturns($connection, 'zcount', 0);
+        dashboardReturnsFor(
+            $connection,
+            'zrange',
+            ['snapshot:queue:default', -1, -1],
+            [json_encode(['runtime' => 1_100, 'throughput' => 80], JSON_THROW_ON_ERROR)],
+        );
         $redis = mockDashboardContract(RedisFactory::class);
         dashboardReturns($redis, 'connection', $connection);
         $pendingState = new DashboardPendingState($queues);

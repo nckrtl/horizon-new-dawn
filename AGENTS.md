@@ -1,6 +1,6 @@
 # Horizon New Dawn
 
-Horizon New Dawn is a Laravel 13 package that replaces Laravel Horizon's bundled UI with a package-owned React and Inertia interface.
+Horizon New Dawn is a Laravel 12 and 13 package that replaces Laravel Horizon's bundled UI with a package-owned React and Inertia interface.
 
 ## Project Context
 
@@ -9,7 +9,7 @@ Horizon New Dawn is a Laravel 13 package that replaces Laravel Horizon's bundled
 
 ## Versions
 
-- Support only PHP 8.5, Laravel 13, Horizon 5.47.2+, Inertia 3, React 19, Tailwind 4, and Wayfinder 0.1.
+- Support only PHP 8.3+, Laravel 12.38+ or 13, Horizon 5.46.0+, Inertia 3, React 19, Tailwind 4, and Wayfinder 0.1.
 - Do not add compatibility branches for older major versions.
 - Use Bun for frontend dependencies and scripts.
 

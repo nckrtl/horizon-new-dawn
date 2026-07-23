@@ -115,6 +115,15 @@ describe('Horizon interface interactions', function (): void {
             ->assertNoConsoleLogs();
     });
 
+    it('keeps queue actions usable without unsupported pause controls', function (): void {
+        visit('/horizon/queues/reports')
+            ->click('button[aria-label="Queue actions for reports"]')
+            ->assertSee('Clear queue')
+            ->assertDontSee('Pause')
+            ->assertNoJavaScriptErrors()
+            ->assertNoConsoleLogs();
+    });
+
     it('opens the monitor tag workflow without submitting it', function (): void {
         visit('/horizon/monitoring')
             ->click('button[aria-label="Monitor Tag"]')

@@ -24,12 +24,18 @@ Compared with Horizon's bundled interface, New Dawn adds:
 ## Requirements
 
 - PHP 8.3 or newer
-- Laravel 11, 12, or 13
-- Laravel Horizon 5.48.1 or newer within the 5.x series
+- Laravel 12.38 or newer, or Laravel 13
+- Laravel Horizon 5.46.0 or newer within the 5.x series
 
-Queue pausing is available when the installed Laravel version provides its complete queue-pause API (Laravel 12.40.2 or newer). New Dawn hides and disables those controls on earlier versions while keeping the rest of the interface available.
+These floors are deliberate:
 
-Laravel 11 is end-of-life. New Dawn remains runtime-compatible with it, but applications should upgrade to a framework release that still receives security fixes.
+- PHP 8.3 is the lowest PHP version covered by the package's release matrix. New Dawn does not claim compatibility with runtimes it does not continuously test.
+- Laravel 12.38 contains the framework fix needed to register console commands correctly with current Symfony Console releases. Earlier Laravel 12 releases can fail while booting Artisan. Laravel 11 is excluded because it is end-of-life.
+- Horizon 5.46.0 is the oldest Horizon release exercised by New Dawn's full package suite, real Redis worker smoke test, and consuming-application browser checks. Older Horizon releases are not part of the supported contract.
+
+Queue pausing is available when the installed Laravel version provides its complete queue-pause API (Laravel 12.40.2 or newer). On Laravel 12.38 through 12.40.1, New Dawn hides only the unsupported pause and resume controls; retrying failures and clearing queues remain available.
+
+Redis Cluster is not currently supported. Queue metadata cleanup uses Redis key scans and Lua operations that have not yet been made cluster-slot aware, so Horizon and its queues must use a standalone Redis connection.
 
 ## Installation
 

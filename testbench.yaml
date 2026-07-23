@@ -15,6 +15,10 @@ providers:
   - NckRtl\HorizonNewDawn\HorizonNewDawnServiceProvider
   - Workbench\App\Providers\WorkbenchServiceProvider
 
+dont-discover:
+  - orchestra/canvas
+  - orchestra/canvas-core
+
 migrations: []
 
 seeders:

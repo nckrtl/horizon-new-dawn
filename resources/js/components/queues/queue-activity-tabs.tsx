@@ -248,7 +248,7 @@ export function QueueActivityTabs({
             </Alert>
           ) : null}
 
-          <InfiniteScroll data="activity" onlyNext buffer={600}>
+          <InfiniteScroll data="activity" onlyNext preserveUrl buffer={600}>
             {tab === "batches" ? (
               <BatchTable
                 batches={visibleBatches}

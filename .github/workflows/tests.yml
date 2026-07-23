@@ -16,38 +16,91 @@ jobs:
     name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }} / Horizon ${{ matrix.horizon }}
     runs-on: ubuntu-latest
 
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     strategy:
       fail-fast: false
       matrix:
         include:
           - php: '8.3'
-            laravel: '11 latest'
-            framework: '^11.0'
-            horizon: '5.48.1'
-            testbench: '^9.0'
-            without-boost: false
+            laravel: '12.38 minimum / Horizon 5.46 minimum'
+            framework: '12.38.0'
+            horizon: '5.46.0'
+            pest: '4.0.0'
+            pest_browser: '4.0.0'
+            pest_plugin_laravel: '4.0.0'
+            testbench: '10.7.0'
+            without-boost: true
           - php: '8.4'
             laravel: '12.40.1 (pause disabled)'
             framework: '12.40.1'
-            horizon: '^5.48.1'
-            testbench: '^10.0'
+            horizon: '5.46.0'
+            pest: '4.0.0'
+            pest_browser: '4.0.0'
+            pest_plugin_laravel: '4.0.0'
+            testbench: '10.10.0'
             without-boost: true
           - php: '8.4'
             laravel: '12.40.2 (pause enabled)'
             framework: '12.40.2'
-            horizon: '^5.48.1'
-            testbench: '^10.0'
+            horizon: '5.46.0'
+            pest: '4.0.0'
+            pest_browser: '4.0.0'
+            pest_plugin_laravel: '4.0.0'
+            testbench: '10.10.0'
             without-boost: true
           - php: '8.4'
-            laravel: '12 latest'
+            laravel: '12 latest / Horizon 5.46 minimum'
             framework: '^12.0'
-            horizon: '^5.48.1'
+            horizon: '5.46.0'
+            pest: '^4.0'
+            pest_browser: '^4.3'
+            pest_plugin_laravel: '^4.0'
             testbench: '^10.0'
             without-boost: false
+          - php: '8.4'
+            laravel: '12 latest / latest Horizon'
+            framework: '^12.0'
+            horizon: '^5.46.0'
+            pest: '^4.0'
+            pest_browser: '^4.3'
+            pest_plugin_laravel: '^4.0'
+            testbench: '^10.0'
+            without-boost: false
+          - php: '8.3'
+            laravel: '13 minimum / Horizon 5.46 minimum'
+            framework: '13.0.0'
+            horizon: '5.46.0'
+            pest: '4.4.5'
+            pest_browser: '4.3.1'
+            pest_plugin_laravel: '4.1.0'
+            testbench: '11.0.0'
+            without-boost: false
           - php: '8.5'
-            laravel: '13 latest'
+            laravel: '13 latest / Horizon 5.46 minimum'
             framework: '^13.0'
-            horizon: '^5.48.1'
+            horizon: '5.46.0'
+            pest: '^4.0'
+            pest_browser: '^4.3'
+            pest_plugin_laravel: '^4.0'
+            testbench: '^11.0'
+            without-boost: false
+          - php: '8.5'
+            laravel: '13 latest / latest Horizon'
+            framework: '^13.0'
+            horizon: '^5.46.0'
+            pest: '^4.0'
+            pest_browser: '^4.3'
+            pest_plugin_laravel: '^4.0'
             testbench: '^11.0'
             without-boost: false
 
@@ -70,6 +123,9 @@ jobs:
           composer require "laravel/framework:${{ matrix.framework }}" --no-interaction --no-update
           composer require "laravel/horizon:${{ matrix.horizon }}" --no-interaction --no-update
           composer require --dev "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+          composer require --dev "pestphp/pest:${{ matrix.pest }}" --no-interaction --no-update
+          composer require --dev "pestphp/pest-plugin-browser:${{ matrix.pest_browser }}" --no-interaction --no-update
+          composer require --dev "pestphp/pest-plugin-laravel:${{ matrix.pest_plugin_laravel }}" --no-interaction --no-update
 
       - name: Install Composer dependencies
         run: composer update --with-all-dependencies --no-security-blocking --no-interaction --no-progress --prefer-dist
@@ -79,6 +135,13 @@ jobs:
 
       - name: Test PHP compatibility
         run: composer test
+
+      - name: Smoke-test a real Horizon worker
+        env:
+          HORIZON_COMPATIBILITY_REDIS_DB: 15
+          HORIZON_COMPATIBILITY_REDIS_HOST: 127.0.0.1
+          HORIZON_COMPATIBILITY_REDIS_PORT: 6379
+        run: composer test:compatibility
 
   tests:
     runs-on: ubuntu-latest

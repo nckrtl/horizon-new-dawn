@@ -49,6 +49,8 @@ function bindBrowserPageFixtures(): void
     Horizon::auth(static fn (): bool => true);
     config()->set('horizon-new-dawn.poll_interval', 0);
     config()->set('queue.connections.redis.retry_after', 120);
+    $capabilities = new FrameworkCapabilities(queuePausing: false);
+    app()->instance(FrameworkCapabilities::class, $capabilities);
 
     $masters = mockDashboardContract(MasterSupervisorRepository::class);
     dashboardReturns($masters, 'all', [(object) ['status' => 'running']]);
@@ -236,7 +238,7 @@ function bindBrowserPageFixtures(): void
     $pauseStatus = new QueuePauseStatus(
         app(QueueManager::class),
         new QueuePauseMetadata(app(CacheFactory::class)),
-        new FrameworkCapabilities(queuePausing: false),
+        $capabilities,
     );
     app()->instance(QueuesData::class, new QueuesData(
         $supervisors,

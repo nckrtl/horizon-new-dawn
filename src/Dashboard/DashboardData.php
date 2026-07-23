@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\Queue;
 use Illuminate\Contracts\Redis\Factory as RedisFactory;
 use Illuminate\Redis\Connections\Connection;
 use Illuminate\Support\Str;
+use JsonException;
 use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 use Laravel\Horizon\Contracts\MetricsRepository;
@@ -102,8 +103,7 @@ final readonly class DashboardData
             $completedRetentionMinutes = max(0, (int) config('horizon.trim.completed', 60));
             $failedJobs = $this->jobsByPeriod('failed_jobs', $failedRetentionMinutes);
             $completedJobs = $this->jobsByPeriod('completed_jobs', $completedRetentionMinutes);
-            $queueWithMaxRuntime = $this->metrics->queueWithMaximumRuntime();
-            $queueWithMaxThroughput = $this->metrics->queueWithMaximumThroughput();
+            [$queueWithMaxRuntime, $queueWithMaxThroughput] = $this->queueMetricLeaders();
 
             return new DashboardSummaryData(
                 available: true,
@@ -339,6 +339,55 @@ final readonly class DashboardData
     private function normalizeQueueName(mixed $queue): ?string
     {
         return is_string($queue) && $queue !== '' ? $queue : null;
+    }
+
+    /** @return array{0: ?string, 1: ?string} */
+    private function queueMetricLeaders(): array
+    {
+        $connection = $this->redis->connection('horizon');
+        $queueWithMaxRuntime = null;
+        $queueWithMaxThroughput = null;
+        $maxRuntime = null;
+        $maxThroughput = null;
+
+        foreach ($this->metrics->measuredQueues() as $queue) {
+            if (! is_string($queue) || $queue === '') {
+                continue;
+            }
+
+            $snapshots = $connection->zrange('snapshot:queue:'.$queue, -1, -1);
+            $snapshotJson = is_array($snapshots) ? ($snapshots[0] ?? null) : null;
+
+            if (! is_string($snapshotJson)) {
+                continue;
+            }
+
+            try {
+                $snapshot = json_decode($snapshotJson, true, flags: JSON_THROW_ON_ERROR);
+            } catch (JsonException) {
+                continue;
+            }
+
+            if (! is_array($snapshot)) {
+                continue;
+            }
+
+            $runtime = $snapshot['runtime'] ?? null;
+
+            if (is_numeric($runtime) && ($maxRuntime === null || $runtime > $maxRuntime)) {
+                $maxRuntime = (float) $runtime;
+                $queueWithMaxRuntime = $queue;
+            }
+
+            $throughput = $snapshot['throughput'] ?? null;
+
+            if (is_numeric($throughput) && ($maxThroughput === null || $throughput > $maxThroughput)) {
+                $maxThroughput = (float) $throughput;
+                $queueWithMaxThroughput = $queue;
+            }
+        }
+
+        return [$queueWithMaxRuntime, $queueWithMaxThroughput];
     }
 
     public function workload(): DashboardWorkloadData

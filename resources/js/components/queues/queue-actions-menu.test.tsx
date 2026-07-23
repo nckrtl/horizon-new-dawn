@@ -151,4 +151,27 @@ describe("QueueActionsMenu", () => {
       "aria-disabled",
     );
   });
+
+  it("keeps unrelated actions available when queue pausing is unsupported", async () => {
+    render(
+      <QueueActionsMenu
+        connection="redis"
+        queue="reports"
+        paused={false}
+        pendingJobs={1}
+        failedJobs={1}
+        horizonBaseUrl="/horizon"
+        queuePausing={false}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Queue actions for reports" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    expect(await screen.findByRole("menuitem", { name: "Retry all failed jobs" })).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: "Clear queue" })).toBeVisible();
+    expect(screen.queryByRole("menuitem", { name: "Pause" })).not.toBeInTheDocument();
+  });
 });

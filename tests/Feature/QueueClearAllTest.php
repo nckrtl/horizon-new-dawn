@@ -7,6 +7,7 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Queue\QueueManager;
 use Illuminate\Queue\RedisQueue;
+use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\SupervisorRepository;
 use Laravel\Horizon\Horizon;
 use NckRtl\HorizonNewDawn\Queues\ClearsQueueMetadata;
@@ -31,6 +32,10 @@ it('clears every supervised queue through the framework', function (): void {
         (object) ['processes' => ['redis:reports,batches' => 2]],
     ]);
     app()->instance(SupervisorRepository::class, $supervisors);
+
+    $jobs = mockDashboardContract(JobRepository::class);
+    dashboardReturns($jobs, 'countPending', 0);
+    app()->instance(JobRepository::class, $jobs);
 
     $queue = new class extends RedisQueue
     {

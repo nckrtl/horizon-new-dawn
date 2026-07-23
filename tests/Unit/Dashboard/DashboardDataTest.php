@@ -51,8 +51,7 @@ function summaryDashboardData(array $masters): DashboardData
     dashboardReturns($jobs, 'countPending', 5);
 
     $metrics = mockDashboardContract(MetricsRepository::class);
-    dashboardReturns($metrics, 'queueWithMaximumRuntime', 'exports');
-    dashboardReturns($metrics, 'queueWithMaximumThroughput', 'default');
+    dashboardReturns($metrics, 'measuredQueues', ['default', 'exports']);
 
     $supervisors = mockDashboardContract(SupervisorRepository::class);
     dashboardReturns($supervisors, 'all', [
@@ -123,6 +122,18 @@ function summaryDashboardData(array $masters): DashboardData
         'zcount',
         ['completed_jobs', '-inf', (string) ($completedDayCutoff->getTimestamp() * -1)],
         31,
+    );
+    dashboardReturnsFor(
+        $connection,
+        'zrange',
+        ['snapshot:queue:default', -1, -1],
+        [json_encode(['runtime' => 1_100, 'throughput' => 80], JSON_THROW_ON_ERROR)],
+    );
+    dashboardReturnsFor(
+        $connection,
+        'zrange',
+        ['snapshot:queue:exports', -1, -1],
+        [json_encode(['runtime' => 1_200, 'throughput' => 70], JSON_THROW_ON_ERROR)],
     );
     $redis = mockDashboardContract(RedisFactory::class);
     dashboardReturns($redis, 'connection', $connection);
