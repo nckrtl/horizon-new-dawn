@@ -66,15 +66,43 @@ describe('Horizon interface interactions', function (): void {
         bindBrowserSupervisorScalingFixtures();
 
         $page = visit('/horizon/instances')->assertSee('Instances');
-        $autoRefreshWasEnabled = $page->script(
-            '() => document.querySelector(\'[aria-label="Auto load new entries"]\')?.getAttribute(\'aria-pressed\') === \'true\'',
-        );
+        $autoRefreshWasEnabled = $page->script(<<<'JS'
+            () => new Promise((resolve, reject) => {
+                const toggle = document.querySelector('[aria-label="Auto load new entries"]')
+                const wasEnabled = toggle?.getAttribute('aria-pressed') === 'true'
+                const timeout = window.setTimeout(
+                    () => finish(new Error('Timed out waiting for the scaling indicator to render.')),
+                    3000,
+                )
+                const observer = new MutationObserver(inspect)
 
-        if (! $autoRefreshWasEnabled) {
-            $page->click('[aria-label="Auto load new entries"]');
-        }
+                function finish(error = null) {
+                    window.clearTimeout(timeout)
+                    observer.disconnect()
 
-        $page->assertPresent('[data-scaling-state="up"]');
+                    if (error) {
+                        reject(error)
+                        return
+                    }
+
+                    resolve(wasEnabled)
+                }
+
+                function inspect() {
+                    if (document.querySelector('[data-scaling-state="up"]')) {
+                        finish()
+                    }
+                }
+
+                observer.observe(document.body, { childList: true, subtree: true })
+
+                if (! wasEnabled) {
+                    toggle?.click()
+                }
+
+                inspect()
+            })
+        JS);
 
         $meters = $page->script(<<<'JS'
             () => {
