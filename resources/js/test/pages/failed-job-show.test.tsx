@@ -23,7 +23,8 @@ const props: FailedJobDetailPageProps = {
     attempts: 2,
     retryOf: null,
     delay: null,
-    delayedUntil: null,
+    scheduledAt: null,
+    originalScheduledAt: null,
     batchId: null,
     pushedAt: 1_784_281_000,
     reservedAt: 1_784_281_001,
@@ -61,5 +62,20 @@ describe("FailedJobShow", () => {
     );
 
     expect(screen.getByRole("button", { name: "Retry failed job" })).toBeEnabled();
+  });
+
+  it("keeps scheduled and created timestamps visible for a scheduled failed job", () => {
+    render(
+      <FailedJobShow
+        {...props}
+        job={{
+          ...props.job,
+          scheduledAt: 1_784_281_600,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Created at")).toBeVisible();
+    expect(screen.getByText("Scheduled at")).toBeVisible();
   });
 });

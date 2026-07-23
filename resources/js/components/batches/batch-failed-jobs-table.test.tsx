@@ -29,6 +29,8 @@ const failedJob = (
   attemptsComplete,
   retryOf: null,
   delay: null,
+  scheduledAt: null,
+  originalScheduledAt: null,
   pushedAt: failedAt - 2,
   reservedAt: failedAt - 1,
   completedAt: null,

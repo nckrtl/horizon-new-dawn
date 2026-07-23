@@ -1,6 +1,7 @@
 import { queryParams, type RouteQueryOptions, type RouteDefinition, applyUrlDefaults } from './../../../../wayfinder'
 import clear from './clear'
 import cancel from './cancel'
+import release from './release'
 /**
 * @see \NckRtl\HorizonNewDawn\Http\Controllers\PendingJobController::destroy
 * @see src/Http/Controllers/PendingJobController.php:14
@@ -56,6 +57,7 @@ destroy.delete = (args: { job: string | number } | [job: string | number ] | str
 const pending = {
     clear: Object.assign(clear, clear),
     cancel: Object.assign(cancel, cancel),
+    release: Object.assign(release, release),
     destroy: Object.assign(destroy, destroy),
 }
 

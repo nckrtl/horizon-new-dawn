@@ -9,6 +9,7 @@ use NckRtl\HorizonNewDawn\Http\Controllers\BatchController;
 use NckRtl\HorizonNewDawn\Http\Controllers\BatchFailedJobClearController;
 use NckRtl\HorizonNewDawn\Http\Controllers\BatchRetryController;
 use NckRtl\HorizonNewDawn\Http\Controllers\DashboardController;
+use NckRtl\HorizonNewDawn\Http\Controllers\DelayedJobReleaseController;
 use NckRtl\HorizonNewDawn\Http\Controllers\FailedJobClearAllController;
 use NckRtl\HorizonNewDawn\Http\Controllers\FailedJobController;
 use NckRtl\HorizonNewDawn\Http\Controllers\FailedJobRetryAllController;
@@ -112,6 +113,8 @@ Route::delete('/jobs/pending', [PendingJobClearAllController::class, 'destroy'])
 Route::delete('/jobs/pending/cancel/{scope}', [PendingJobsCancellationController::class, 'destroy'])
     ->where('scope', 'ready|delayed|pending')
     ->name('jobs.pending.cancel.destroy');
+Route::post('/jobs/pending/{job}/release', [DelayedJobReleaseController::class, 'store'])
+    ->name('jobs.pending.release.store');
 Route::delete('/jobs/pending/{job}', [PendingJobController::class, 'destroy'])->name('jobs.pending.destroy');
 Route::get('/jobs/{type}', [JobController::class, 'index'])
     ->where('type', 'pending|completed|silenced')

@@ -15,6 +15,8 @@ export type JobRow = {
   attemptsComplete?: boolean;
   retryOf: string | null;
   delay: number | null;
+  scheduledAt: number | null;
+  originalScheduledAt: number | null;
   pushedAt: number | null;
   reservedAt: number | null;
   completedAt: number | null;
@@ -46,7 +48,6 @@ export type JobDetail = Omit<
   | "retryEligible"
   | "attemptsComplete"
 > & {
-  delayedUntil: number | null;
   batchId: string | null;
   payload: Record<string, unknown>;
 };

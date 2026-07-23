@@ -2,6 +2,7 @@ import {
   BellOffIcon,
   CircleCheckIcon,
   CirclePauseIcon,
+  CirclePlayIcon,
   CircleXIcon,
   Clock3Icon,
   LoaderCircleIcon,
@@ -10,7 +11,14 @@ import {
 
 import { cn } from "@/lib/utils";
 
-export type JobStatusValue = "ready" | "reserved" | "delayed" | "completed" | "silenced" | "failed";
+export type JobStatusValue =
+  | "ready"
+  | "reserved"
+  | "delayed"
+  | "released"
+  | "completed"
+  | "silenced"
+  | "failed";
 
 const statuses = {
   ready: {
@@ -27,6 +35,11 @@ const statuses = {
     label: "Delayed",
     icon: Clock3Icon,
     iconClassName: "text-status-warning-icon",
+  },
+  released: {
+    label: "Released",
+    icon: CirclePlayIcon,
+    iconClassName: "text-status-success-icon",
   },
   completed: {
     label: "Completed",

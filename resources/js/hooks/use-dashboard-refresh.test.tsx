@@ -3,13 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useDashboardRefresh, usePageRefresh } from "@/hooks/use-dashboard-refresh";
 
-const { start, stop, usePoll } = vi.hoisted(() => ({
+const { reload, start, stop, usePoll } = vi.hoisted(() => ({
+  reload: vi.fn(),
   start: vi.fn(),
   stop: vi.fn(),
   usePoll: vi.fn(),
 }));
 
 vi.mock("@inertiajs/react", () => ({
+  router: { reload },
   usePoll,
 }));
 
@@ -35,6 +37,7 @@ function PageRefreshHarness({ resetProps }: { resetProps?: string[] }) {
 
 describe("useDashboardRefresh", () => {
   beforeEach(() => {
+    reload.mockReset();
     start.mockReset();
     stop.mockReset();
     usePoll.mockReset();
@@ -50,7 +53,7 @@ describe("useDashboardRefresh", () => {
     });
     expect(start).toHaveBeenCalledOnce();
     expect(usePoll.mock.calls[0][1]()).toEqual({
-      only: ["summary", "workload", "horizon", "navigationCounts"],
+      only: ["summary", "workload", "supervisors", "horizon", "navigationCounts"],
       preserveUrl: true,
       showProgress: false,
     });
@@ -98,5 +101,20 @@ describe("useDashboardRefresh", () => {
 
     expect(start).toHaveBeenCalledOnce();
     expect(stop).toHaveBeenCalled();
+  });
+
+  it("refreshes immediately when automatic refresh is enabled", () => {
+    const { rerender } = render(<RefreshHarness interval={5000} enabled={false} />);
+
+    expect(reload).not.toHaveBeenCalled();
+
+    rerender(<RefreshHarness interval={5000} enabled />);
+
+    expect(reload).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledWith({
+      only: ["summary", "workload", "supervisors", "horizon", "navigationCounts"],
+      preserveUrl: true,
+      showProgress: false,
+    });
   });
 });

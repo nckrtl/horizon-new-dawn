@@ -107,18 +107,18 @@ function identityProperties(supervisor: SupervisorDetails, horizonBaseUrl: strin
           "—"
         ),
     },
-    { label: "Current Processes", value: numberFormatter.format(supervisor.processes) },
+    { label: "Current processes", value: numberFormatter.format(supervisor.processes) },
   ];
 }
 
 function scalingProperties(supervisor: SupervisorDetails): Property[] {
   return [
-    { label: "Balance Strategy", value: namedValue(supervisor.balance) },
-    { label: "Auto-scaling Strategy", value: namedValue(supervisor.autoScalingStrategy) },
-    { label: "Minimum Processes", value: numberValue(supervisor.minProcesses) },
-    { label: "Maximum Processes", value: numberValue(supervisor.maxProcesses) },
-    { label: "Balance Cooldown", value: seconds(supervisor.balanceCooldown) },
-    { label: "Maximum Shift", value: numberValue(supervisor.balanceMaxShift) },
+    { label: "Balance strategy", value: namedValue(supervisor.balance) },
+    { label: "Auto-scaling strategy", value: namedValue(supervisor.autoScalingStrategy) },
+    { label: "Minimum processes", value: numberValue(supervisor.minProcesses) },
+    { label: "Maximum processes", value: numberValue(supervisor.maxProcesses) },
+    { label: "Balance cooldown", value: seconds(supervisor.balanceCooldown) },
+    { label: "Maximum shift", value: numberValue(supervisor.balanceMaxShift) },
   ];
 }
 
@@ -126,7 +126,7 @@ function workerProperties(supervisor: SupervisorDetails): Property[] {
   return [
     { label: "Memory", value: supervisor.memory === null ? "—" : `${supervisor.memory} MB` },
     { label: "Timeout", value: seconds(supervisor.timeout) },
-    { label: "Retry After", value: seconds(supervisor.retryAfter) },
+    { label: "Retry after", value: seconds(supervisor.retryAfter) },
     {
       label: "Tries",
       value:
@@ -137,12 +137,12 @@ function workerProperties(supervisor: SupervisorDetails): Property[] {
             : numberFormatter.format(supervisor.maxTries),
     },
     { label: "Backoff", value: seconds(supervisor.backoff) },
-    { label: "Maximum Jobs", value: maximum(supervisor.maxJobs) },
-    { label: "Maximum Lifetime", value: maximumDuration(supervisor.maxTime) },
+    { label: "Maximum jobs", value: maximum(supervisor.maxJobs) },
+    { label: "Maximum lifetime", value: maximumDuration(supervisor.maxTime) },
     { label: "Sleep", value: seconds(supervisor.sleep) },
     { label: "Rest", value: seconds(supervisor.rest) },
     {
-      label: "Force in Maintenance",
+      label: "Force in maintenance",
       value: supervisor.force === null ? "—" : supervisor.force ? "Enabled" : "Disabled",
     },
     { label: "Niceness", value: numberValue(supervisor.nice) },

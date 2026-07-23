@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NckRtl\HorizonNewDawn\FailedJobs;
 
+use Illuminate\Contracts\Redis\Factory as RedisFactory;
 use Illuminate\Support\Collection;
 use JsonException;
 use Laravel\Horizon\Contracts\JobRepository;
@@ -24,6 +25,7 @@ final readonly class FailedJobsData
         private TagRepository $tags,
         private JobsData $jobs,
         private FailedJobRetryEligibility $retryEligibility,
+        private ?RedisFactory $redis = null,
     ) {}
 
     public function page(int $afterIndex, ?string $tag = null): JobPageData
@@ -32,13 +34,13 @@ final readonly class FailedJobsData
             $tag = trim($tag ?? '');
 
             if ($tag === '') {
-                $failed = $this->repository->getFailed((string) $afterIndex);
+                $failed = $this->oldestFailed($afterIndex);
                 $total = $this->repository->countFailed();
                 $current = $afterIndex;
                 $next = $failed->count() === self::PAGE_SIZE ? $this->lastIndex($failed) : null;
             } else {
                 $current = max(0, $afterIndex);
-                $ids = $this->tags->paginate("failed:{$tag}", $current, self::PAGE_SIZE);
+                $ids = $this->oldestTaggedFailed($tag, $current);
                 $jobIds = array_values(array_filter($ids, is_string(...)));
                 $failed = $this->repository->getJobs($jobIds, $current);
                 $total = $this->tags->count("failed:{$tag}");
@@ -162,7 +164,8 @@ final readonly class FailedJobsData
                 attempts: $detail->attempts,
                 retryOf: $detail->retryOf,
                 delay: $detail->delay,
-                delayedUntil: $detail->delayedUntil,
+                scheduledAt: $detail->scheduledAt,
+                originalScheduledAt: $detail->originalScheduledAt,
                 batchId: $detail->batchId,
                 retried: $this->wasRetried($job),
                 retriedBy: $this->retries($job),
@@ -178,6 +181,46 @@ final readonly class FailedJobsData
 
             return null;
         }
+    }
+
+    /** @return Collection<int, mixed> */
+    private function oldestFailed(int $afterIndex): Collection
+    {
+        if ($this->redis === null) {
+            return $this->repository->getFailed((string) $afterIndex);
+        }
+
+        $start = $afterIndex + 1;
+        $ids = $this->redis->connection('horizon')->zrevrange(
+            'failed_jobs',
+            $start,
+            $start + self::PAGE_SIZE - 1,
+        );
+
+        if (! is_array($ids)) {
+            return new Collection;
+        }
+
+        return $this->repository->getJobs(
+            array_values(array_filter($ids, is_string(...))),
+            $start,
+        );
+    }
+
+    /** @return array<int, mixed> */
+    private function oldestTaggedFailed(string $tag, int $startingAt): array
+    {
+        if ($this->redis === null) {
+            return $this->tags->paginate("failed:{$tag}", $startingAt, self::PAGE_SIZE);
+        }
+
+        $ids = $this->redis->connection('horizon')->zrange(
+            "failed:{$tag}",
+            $startingAt,
+            $startingAt + self::PAGE_SIZE - 1,
+        );
+
+        return is_array($ids) ? array_values($ids) : [];
     }
 
     /** @param Collection<int, mixed> $jobs */

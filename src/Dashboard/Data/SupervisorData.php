@@ -17,5 +17,6 @@ final class SupervisorData extends Data
         public readonly int $processes,
         public readonly string $balancing,
         public readonly string $status,
+        public readonly ?SupervisorScalingData $scaling,
     ) {}
 }

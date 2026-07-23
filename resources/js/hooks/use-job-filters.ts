@@ -20,7 +20,11 @@ const filterQueryParameters = {
   retry: "filter_retry",
 } satisfies Record<JobFilterKey, string>;
 
-export function useJobFilters(scope: JobFilterScope, jobs: readonly JobRow[]) {
+export function useJobFilters(
+  scope: JobFilterScope,
+  jobs: readonly JobRow[],
+  now = Date.now() / 1000,
+) {
   const availableFilterKeys = jobFilterKeys(scope);
   const [values, setValues] = useState<JobFilterValues>(() =>
     filterValuesFromCurrentQuery(availableFilterKeys),
@@ -47,8 +51,8 @@ export function useJobFilters(scope: JobFilterScope, jobs: readonly JobRow[]) {
   }, [availableFilterKeys]);
 
   const filteredJobs = useMemo(
-    () => jobs.filter((job) => matchesJobFilters(job, availableFilterKeys, values)),
-    [availableFilterKeys, jobs, values],
+    () => jobs.filter((job) => matchesJobFilters(job, availableFilterKeys, values, now)),
+    [availableFilterKeys, jobs, now, values],
   );
   const activeFilterCount = availableFilterKeys.filter(
     (filterKey) => values[filterKey] !== null,

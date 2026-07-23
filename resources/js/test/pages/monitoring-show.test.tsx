@@ -23,6 +23,8 @@ const job = (overrides: Partial<JobRow>): JobRow => ({
   attempts: 1,
   retryOf: null,
   delay: null,
+  scheduledAt: null,
+  originalScheduledAt: null,
   pushedAt: 1_784_281_000,
   reservedAt: 1_784_281_001,
   completedAt: 1_784_281_002,

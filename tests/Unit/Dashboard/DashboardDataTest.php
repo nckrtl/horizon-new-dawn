@@ -30,6 +30,7 @@ use NckRtl\HorizonNewDawn\Queues\QueueWaitThreshold;
 
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturns;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsFor;
+use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsUsing;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardThrows;
 use function NckRtl\HorizonNewDawn\Tests\Support\horizonBatch;
 use function NckRtl\HorizonNewDawn\Tests\Support\mockDashboardContract;
@@ -595,6 +596,138 @@ describe('DashboardData', function (): void {
         ]);
     });
 
+    it('predicts the next auto-scaling process change with the Horizon strategy', function (): void {
+        $supervisors = mockDashboardContract(SupervisorRepository::class);
+        dashboardReturns($supervisors, 'all', [
+            (object) [
+                'name' => 'web:supervisor-up',
+                'master' => 'web',
+                'status' => 'running',
+                'processes' => ['redis:default' => 2],
+                'options' => [
+                    'connection' => 'redis',
+                    'queue' => 'default',
+                    'balance' => 'auto',
+                    'autoScalingStrategy' => 'time',
+                    'minProcesses' => 1,
+                    'maxProcesses' => 8,
+                ],
+            ],
+            (object) [
+                'name' => 'web:supervisor-down',
+                'master' => 'web',
+                'status' => 'running',
+                'processes' => ['redis:mail' => 3, 'redis:batches' => 2],
+                'options' => [
+                    'connection' => 'redis',
+                    'queue' => 'mail,batches',
+                    'balance' => 'auto',
+                    'autoScalingStrategy' => 'size',
+                    'minProcesses' => 1,
+                    'maxProcesses' => 8,
+                ],
+            ],
+            (object) [
+                'name' => 'web:supervisor-steady',
+                'master' => 'web',
+                'status' => 'running',
+                'processes' => ['redis:exports' => 1, 'redis:reports' => 1],
+                'options' => [
+                    'connection' => 'redis',
+                    'queue' => 'exports,reports',
+                    'balance' => 'auto',
+                    'autoScalingStrategy' => 'time',
+                    'minProcesses' => 1,
+                    'maxProcesses' => 8,
+                ],
+            ],
+            (object) [
+                'name' => 'web:supervisor-fixed',
+                'master' => 'web',
+                'status' => 'running',
+                'processes' => ['redis:fixed' => 4],
+                'options' => [
+                    'connection' => 'redis',
+                    'queue' => 'fixed',
+                    'balance' => 'simple',
+                    'minProcesses' => 1,
+                    'maxProcesses' => 4,
+                ],
+            ],
+            (object) [
+                'name' => 'web:supervisor-capped',
+                'master' => 'web',
+                'status' => 'running',
+                'processes' => ['redis:low' => 1, 'redis:bulk' => 0],
+                'options' => [
+                    'connection' => 'redis',
+                    'queue' => 'low,bulk',
+                    'balance' => 'auto',
+                    'autoScalingStrategy' => 'time',
+                    'minProcesses' => 1,
+                    'maxProcesses' => 1,
+                ],
+            ],
+        ]);
+
+        $masters = mockDashboardContract(MasterSupervisorRepository::class);
+        dashboardReturns($masters, 'all', []);
+
+        $queue = mockDashboardContract(Queue::class);
+        dashboardReturnsUsing(
+            $queue,
+            'readyNow',
+            static fn (string $queueName): int => $queueName === 'default' ? 12 : 0,
+        );
+        $queues = mockDashboardContract(QueueFactory::class);
+        dashboardReturns($queues, 'connection', $queue);
+        $metrics = mockDashboardContract(MetricsRepository::class);
+        dashboardReturns($metrics, 'runtimeForQueue', 1000);
+
+        $data = new DashboardData(
+            mockDashboardContract(JobRepository::class),
+            $metrics,
+            $supervisors,
+            $masters,
+            $queues,
+            mockDashboardContract(WaitTimeCalculator::class),
+            unusedQueuePauseStatus(),
+            unusedDashboardPendingState(),
+            unusedDashboardBatchSummary(),
+            mockDashboardContract(RedisFactory::class),
+            app(QueueWaitThreshold::class),
+        );
+
+        $items = [];
+
+        foreach ($data->supervisors()->groups[0]->items as $item) {
+            $items[$item->name] = $item->toArray();
+        }
+
+        expect($items['supervisor-up']['scaling'])->toBe([
+            'readyJobs' => 12,
+            'state' => 'up',
+            'strategy' => 'time',
+            'targetProcesses' => 3,
+        ])->and($items['supervisor-down']['scaling'])->toBe([
+            'readyJobs' => 0,
+            'state' => 'down',
+            'strategy' => 'size',
+            'targetProcesses' => 3,
+        ])->and($items['supervisor-steady']['scaling'])->toBe([
+            'readyJobs' => 0,
+            'state' => 'steady',
+            'strategy' => 'time',
+            'targetProcesses' => 2,
+        ])->and($items['supervisor-fixed']['scaling'])->toBeNull()
+            ->and($items['supervisor-capped']['scaling'])->toBe([
+                'readyJobs' => 0,
+                'state' => 'steady',
+                'strategy' => 'time',
+                'targetProcesses' => 1,
+            ]);
+    });
+
     it('groups and normalizes Horizon supervisors', function (): void {
         MasterSupervisor::determineNameUsing(static fn (): string => 'web');
         $masterName = MasterSupervisor::basename().'-ABCD';
@@ -670,6 +803,7 @@ describe('DashboardData', function (): void {
                     'processes' => 2,
                     'balancing' => 'Auto',
                     'status' => 'running',
+                    'scaling' => null,
                 ]],
             ], [
                 'name' => $masterName,
@@ -685,6 +819,7 @@ describe('DashboardData', function (): void {
                     'processes' => 4,
                     'balancing' => 'Auto',
                     'status' => 'running',
+                    'scaling' => null,
                 ], [
                     'id' => $masterName.':supervisor-2',
                     'name' => 'supervisor-2',
@@ -693,6 +828,7 @@ describe('DashboardData', function (): void {
                     'processes' => 1,
                     'balancing' => 'Disabled',
                     'status' => 'running',
+                    'scaling' => null,
                 ]],
             ]],
             'message' => null,

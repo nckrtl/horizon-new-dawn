@@ -13,7 +13,11 @@ function RunningInstancesIndex({ horizon, supervisors }: RunningInstancesPagePro
   return (
     <>
       <Head title="Instances" />
-      <SupervisorsTable supervisors={supervisors} horizonBaseUrl={horizon.baseUrl} />
+      <SupervisorsTable
+        autoRefreshEnabled={autoLoad}
+        supervisors={supervisors}
+        horizonBaseUrl={horizon.baseUrl}
+      />
     </>
   );
 }

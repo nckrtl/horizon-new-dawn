@@ -1,5 +1,6 @@
 import { Link, router } from "@inertiajs/react";
 import { CpuIcon, TriangleAlertIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { SortableTableHead } from "@/components/data-table/sortable-table-head";
 import {
@@ -28,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { show as supervisorShow } from "@/generated/routes/horizon-new-dawn/supervisors";
 import { useSortableRows, type SortColumn } from "@/hooks/use-sortable-rows";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
@@ -53,10 +55,12 @@ function directionFor(key: string, sort: { key: string; direction: "asc" | "desc
 }
 
 function HorizonInstance({
+  autoRefreshEnabled,
   group,
   hasMoreThanTwoInstances,
   horizonBaseUrl,
 }: {
+  autoRefreshEnabled: boolean;
   group: DashboardSupervisors["groups"][number];
   hasMoreThanTwoInstances: boolean;
   horizonBaseUrl: string;
@@ -134,6 +138,7 @@ function HorizonInstance({
             />
           ) : null}
           {sorted.rows.map((item) => {
+            const scaling = autoRefreshEnabled ? item.scaling : null;
             const detailUrl = resolveHorizonRoute(
               supervisorShow(encodeURIComponent(item.id)),
               horizonBaseUrl,
@@ -165,8 +170,16 @@ function HorizonInstance({
                 <TableCell tone="secondary" className="px-6">
                   {item.queues.join(", ")}
                 </TableCell>
-                <TableCell tone="secondary" className="px-6 text-right tabular-nums">
-                  {item.processes}
+                <TableCell tone="secondary" className="relative px-6 text-right tabular-nums">
+                  <span className={scaling ? "mr-4" : undefined} data-process-count="">
+                    {item.processes}
+                  </span>
+                  {scaling ? (
+                    <SupervisorScalingIndicator
+                      currentProcesses={item.processes}
+                      scaling={scaling}
+                    />
+                  ) : null}
                 </TableCell>
                 <TableCell tone="secondary" className="px-6 text-right">
                   {item.balancing}
@@ -189,10 +202,151 @@ function HorizonInstance({
   );
 }
 
+type SupervisorScalingState = "up" | "down" | "steady";
+type ActiveSupervisorScalingState = Exclude<SupervisorScalingState, "steady">;
+
+const scalingStates = {
+  up: {
+    label: "Scaling up",
+    activeClassName: "text-status-success-icon",
+  },
+  down: {
+    label: "Scaling down",
+    activeClassName: "text-status-destructive-icon",
+  },
+  steady: {
+    label: "Autoscaling idle",
+    activeClassName: "",
+  },
+} satisfies Record<SupervisorScalingState, { label: string; activeClassName: string }>;
+
+const scalingBlockPositions = [0, 1, 2, 3, 4] as const;
+const scalingStepDuration = 720;
+
+function SupervisorScalingIndicator({
+  currentProcesses,
+  scaling,
+}: {
+  currentProcesses: number;
+  scaling: NonNullable<SupervisorItem["scaling"]>;
+}) {
+  const targetState: SupervisorScalingState =
+    scaling.targetProcesses > currentProcesses
+      ? "up"
+      : scaling.targetProcesses < currentProcesses
+        ? "down"
+        : "steady";
+  const [animationState, setAnimationState] = useState<ActiveSupervisorScalingState | null>(() =>
+    targetState === "steady" ? null : targetState,
+  );
+  const [filledBlockCount, setFilledBlockCount] = useState(() =>
+    targetState === "up" ? 1 : targetState === "down" ? 5 : 0,
+  );
+  const targetStateRef = useRef(targetState);
+  targetStateRef.current = targetState;
+
+  useEffect(() => {
+    if (animationState === null && targetState !== "steady") {
+      setAnimationState(targetState);
+    }
+  }, [animationState, targetState]);
+
+  useEffect(() => {
+    if (animationState === null) {
+      setFilledBlockCount(0);
+
+      return;
+    }
+
+    const sequence = animationState === "up" ? [1, 2, 3, 4, 5] : [5, 4, 3, 2, 1];
+    let position = 0;
+
+    setFilledBlockCount(sequence[0]);
+
+    const timer = window.setInterval(() => {
+      if (position === sequence.length - 1) {
+        const nextState = targetStateRef.current;
+
+        if (nextState !== animationState) {
+          window.clearInterval(timer);
+          setAnimationState(nextState === "steady" ? null : nextState);
+
+          return;
+        }
+      }
+
+      position = (position + 1) % sequence.length;
+      setFilledBlockCount(sequence[position]);
+    }, scalingStepDuration);
+
+    return () => window.clearInterval(timer);
+  }, [animationState]);
+
+  const state = animationState ?? targetState;
+  const isFinishing = animationState !== null && targetState !== animationState;
+  const details = scalingStates[state];
+  const strategy = scaling.strategy === "size" ? "Job-count" : "Time";
+  const jobLabel = scaling.readyJobs === 1 ? "job" : "jobs";
+  const processLabel = currentProcesses === 1 ? "process" : "processes";
+  let label = `${details.label} at ${currentProcesses} ${processLabel}`;
+
+  if (isFinishing) {
+    label = `Finishing scale ${state} at ${currentProcesses} ${processLabel}`;
+  } else if (state !== "steady") {
+    const targetProcessLabel = scaling.targetProcesses === 1 ? "process" : "processes";
+    label = `${details.label} from ${currentProcesses} ${processLabel} to ${scaling.targetProcesses} ${targetProcessLabel}`;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            className="absolute inset-y-1 right-6 z-10 w-2 cursor-help p-0 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+            data-scaling-state={state}
+            data-scaling-filled={state === "steady" ? 0 : filledBlockCount}
+            aria-label={`${label}. ${strategy}-based autoscaling with ${scaling.readyJobs} ready ${jobLabel}.`}
+          >
+            <div
+              aria-hidden="true"
+              data-scaling-track=""
+              className="flex h-full w-full flex-col justify-center gap-px"
+            >
+              {scalingBlockPositions.map((position) => {
+                const isFilled =
+                  state !== "steady" && position >= scalingBlockPositions.length - filledBlockCount;
+
+                return (
+                  <span
+                    key={position}
+                    data-scaling-block=""
+                    data-scaling-block-filled={isFilled}
+                    className={cn(
+                      "h-[3px] w-2 flex-none animate-none rounded-[1px] bg-muted-foreground/25 transition-none",
+                      details.activeClassName,
+                      isFilled && "bg-current",
+                    )}
+                  />
+                );
+              })}
+            </div>
+          </button>
+        }
+      />
+      <TooltipContent side="left" sideOffset={8}>
+        {label} · {strategy}-based · {scaling.readyJobs} ready {jobLabel}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function SupervisorsTable({
+  autoRefreshEnabled,
   supervisors,
   horizonBaseUrl,
 }: {
+  autoRefreshEnabled: boolean;
   supervisors: DashboardSupervisors;
   horizonBaseUrl: string;
 }) {
@@ -266,6 +420,7 @@ export function SupervisorsTable({
         <div className="divide-y divide-separator">
           {supervisors.groups.map((group) => (
             <HorizonInstance
+              autoRefreshEnabled={autoRefreshEnabled}
               group={group}
               hasMoreThanTwoInstances={supervisors.groups.length > 2}
               horizonBaseUrl={horizonBaseUrl}

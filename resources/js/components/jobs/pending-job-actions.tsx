@@ -1,5 +1,5 @@
 import { router } from "@inertiajs/react";
-import { BanIcon, LoaderCircleIcon } from "lucide-react";
+import { BanIcon, LoaderCircleIcon, PlayIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -15,16 +15,21 @@ import {
 } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { destroy as cancelPendingJob } from "@/generated/routes/horizon-new-dawn/jobs/pending";
+import { store as releaseDelayedJob } from "@/generated/routes/horizon-new-dawn/jobs/pending/release";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 
 export function PendingJobActionsMenu({
   jobId,
   horizonBaseUrl,
+  canCancel = true,
+  canRelease = false,
 }: {
   jobId: string;
   horizonBaseUrl: string;
+  canCancel?: boolean;
+  canRelease?: boolean;
 }) {
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [action, setAction] = useState<"cancel" | "release" | null>(null);
   const [working, setWorking] = useState(false);
 
   const cancel = () => {
@@ -33,45 +38,89 @@ export function PendingJobActionsMenu({
     router.delete(route.url, {
       preserveScroll: true,
       onStart: () => setWorking(true),
-      onSuccess: () => setDialogOpen(false),
+      onSuccess: () => setAction(null),
       onFinish: () => setWorking(false),
     });
   };
+
+  const release = () => {
+    const route = resolveHorizonRoute(releaseDelayedJob(jobId), horizonBaseUrl);
+
+    router.post(
+      route.url,
+      {},
+      {
+        preserveScroll: true,
+        onStart: () => setWorking(true),
+        onSuccess: () => setAction(null),
+        onFinish: () => setWorking(false),
+      },
+    );
+  };
+
+  if (!canCancel && !canRelease) {
+    return null;
+  }
+
+  const releasing = action === "release";
 
   return (
     <>
       <DropdownMenu>
         <ActionMenuTrigger available label="Pending job actions" working={working} />
         <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem variant="destructive" onSelect={() => setDialogOpen(true)}>
-            <BanIcon />
-            Cancel job
-          </DropdownMenuItem>
+          {canRelease ? (
+            <DropdownMenuItem onSelect={() => setAction("release")}>
+              <PlayIcon />
+              Make available now
+            </DropdownMenuItem>
+          ) : null}
+          {canCancel ? (
+            <DropdownMenuItem variant="destructive" onSelect={() => setAction("cancel")}>
+              <BanIcon />
+              Cancel job
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={action !== null} onOpenChange={(open) => !open && setAction(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancel this job?</DialogTitle>
+            <DialogTitle>
+              {releasing ? "Make this job available now?" : "Cancel this job?"}
+            </DialogTitle>
             <DialogDescription>
-              Remove this job before a worker reserves it. The job will not run, and this action
-              cannot be undone.
+              {releasing
+                ? "Move this job out of its schedule and make it available to workers immediately. Existing ready jobs remain ahead of it."
+                : "Remove this job before a worker reserves it. The job will not run, and this action cannot be undone."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="ghost" disabled={working} />}>
-              Keep job
+              {releasing ? "Keep scheduled" : "Keep job"}
             </DialogClose>
             <Button
               type="button"
-              variant="destructive"
+              variant={releasing ? "default" : "destructive"}
               disabled={working}
-              data-test="confirm-cancel-job"
-              onClick={cancel}
+              data-test={releasing ? "confirm-release-job" : "confirm-cancel-job"}
+              onClick={releasing ? release : cancel}
             >
-              {working ? <LoaderCircleIcon className="animate-spin" /> : <BanIcon />}
-              {working ? "Cancelling…" : "Cancel job"}
+              {working ? (
+                <LoaderCircleIcon className="animate-spin" />
+              ) : releasing ? (
+                <PlayIcon />
+              ) : (
+                <BanIcon />
+              )}
+              {working
+                ? releasing
+                  ? "Making available…"
+                  : "Cancelling…"
+                : releasing
+                  ? "Make available now"
+                  : "Cancel job"}
             </Button>
           </DialogFooter>
         </DialogContent>

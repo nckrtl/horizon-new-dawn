@@ -21,6 +21,8 @@ final class JobRowData extends Data
         public readonly int $attempts,
         public readonly ?string $retryOf,
         public readonly ?int $delay,
+        public readonly ?float $scheduledAt,
+        public readonly ?float $originalScheduledAt,
         public readonly ?float $pushedAt,
         public readonly ?float $reservedAt,
         public readonly ?float $completedAt,

@@ -24,16 +24,17 @@ final readonly class JobsData
     public function __construct(
         private JobRepository $jobs,
         private ?RedisFactory $redis = null,
+        private ?PendingJobPaginator $pendingJobs = null,
     ) {}
 
     public function page(JobListType $type, int $afterIndex): JobPageData
     {
         try {
-            $cursor = (string) $afterIndex;
-            [$jobs, $total] = match ($type) {
-                JobListType::Pending => [$this->jobs->getPending($cursor), $this->jobs->countPending()],
-                JobListType::Completed => [$this->jobs->getCompleted($cursor), $this->jobs->countCompleted()],
-                JobListType::Silenced => [$this->jobs->getSilenced($cursor), $this->jobs->countSilenced()],
+            $jobs = $this->oldest($type, $afterIndex);
+            $total = match ($type) {
+                JobListType::Pending => $this->jobs->countPending(),
+                JobListType::Completed => $this->jobs->countCompleted(),
+                JobListType::Silenced => $this->jobs->countSilenced(),
             };
 
             $items = [];
@@ -122,6 +123,19 @@ final readonly class JobsData
         $failedAt = $status === 'failed'
             ? $this->timestamp($job->failed_at ?? null)
             : null;
+        $delay = $this->delaySeconds($job->delay ?? null, $decodedCommand, $pushedAt);
+        $originalScheduledAt = $this->initialScheduledAt(
+            $payload,
+            $decodedCommand,
+            $pushedAt,
+            $delay,
+        );
+        $scheduledAt = $this->scheduledAt(
+            $job,
+            $status,
+            $payload,
+            $originalScheduledAt,
+        );
         $finishedAt = match ($status) {
             'failed' => $failedAt,
             'completed' => $completedAt,
@@ -142,7 +156,9 @@ final readonly class JobsData
             attempts: $attemptsOverride
                 ?? (is_numeric($payload['attempts'] ?? null) ? (int) $payload['attempts'] : 0),
             retryOf: is_string($payload['retry_of'] ?? null) ? $payload['retry_of'] : null,
-            delay: $this->delaySeconds($job->delay ?? null, $decodedCommand, $pushedAt),
+            delay: $delay,
+            scheduledAt: $scheduledAt,
+            originalScheduledAt: $originalScheduledAt,
             pushedAt: $pushedAt,
             reservedAt: $reservedAt,
             completedAt: $completedAt,
@@ -181,7 +197,8 @@ final readonly class JobsData
             attempts: $row->attempts,
             retryOf: $row->retryOf,
             delay: $row->delay,
-            delayedUntil: $this->delayedUntil($job, $row, $decodedCommand),
+            scheduledAt: $row->scheduledAt,
+            originalScheduledAt: $row->originalScheduledAt,
             batchId: is_string($data['batchId'] ?? null) ? $data['batchId'] : null,
             pushedAt: $row->pushedAt,
             reservedAt: $row->reservedAt,
@@ -198,6 +215,50 @@ final readonly class JobsData
         $last = $jobs->last();
 
         return is_object($last) && is_numeric($last->index ?? null) ? (int) $last->index : null;
+    }
+
+    /** @return Collection<int, mixed> */
+    private function oldest(JobListType $type, int $afterIndex): Collection
+    {
+        if ($type === JobListType::Pending && $this->pendingJobs !== null) {
+            $start = $afterIndex + 1;
+
+            return $this->jobs->getJobs(
+                $this->pendingJobs->ids($start, self::PAGE_SIZE),
+                $start,
+            );
+        }
+
+        if ($this->redis === null) {
+            $cursor = (string) $afterIndex;
+
+            return match ($type) {
+                JobListType::Pending => $this->jobs->getPending($cursor),
+                JobListType::Completed => $this->jobs->getCompleted($cursor),
+                JobListType::Silenced => $this->jobs->getSilenced($cursor),
+            };
+        }
+
+        $start = $afterIndex + 1;
+        $key = match ($type) {
+            JobListType::Pending => 'pending_jobs',
+            JobListType::Completed => 'completed_jobs',
+            JobListType::Silenced => 'silenced_jobs',
+        };
+        $ids = $this->redis->connection('horizon')->zrevrange(
+            $key,
+            $start,
+            $start + self::PAGE_SIZE - 1,
+        );
+
+        if (! is_array($ids)) {
+            return new Collection;
+        }
+
+        return $this->jobs->getJobs(
+            array_values(array_filter($ids, is_string(...))),
+            $start,
+        );
     }
 
     /** @return array<string, mixed> */
@@ -396,23 +457,62 @@ final readonly class JobsData
         return is_numeric($delay) ? max(0, (int) $delay) : null;
     }
 
-    /** @param array<array-key, mixed>|null $decodedCommand */
-    private function delayedUntil(
+    /** @param array<string, mixed> $payload */
+    private function scheduledAt(
         object $job,
-        JobRowData $row,
-        ?array $decodedCommand,
+        string $status,
+        array $payload,
+        ?float $originalScheduledAt,
     ): ?float {
-        $releasedDelay = $this->numericDelay($job->delay ?? null);
-
-        if ($releasedDelay === null) {
-            return $this->initialDelayedUntil($decodedCommand, $row->pushedAt, $row->delay);
-        }
-
-        if ($row->status !== 'pending' || $releasedDelay === 0) {
+        if ($status !== 'pending') {
             return null;
         }
 
-        return $this->releasedUntil($job, $releasedDelay);
+        if (is_numeric($payload['horizonNewDawn']['madeAvailableAt'] ?? null)) {
+            return null;
+        }
+
+        $releasedDelay = $this->numericDelay($job->delay ?? null);
+
+        if ($releasedDelay === null) {
+            return $originalScheduledAt;
+        }
+
+        if ($releasedDelay > 0) {
+            return $this->releasedUntil($job, $releasedDelay);
+        }
+
+        return $originalScheduledAt;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<array-key, mixed>|null  $decodedCommand
+     */
+    private function initialScheduledAt(
+        array $payload,
+        ?array $decodedCommand,
+        ?float $pushedAt,
+        ?int $delay,
+    ): ?float {
+        if (isset($payload['retry_of'])) {
+            return null;
+        }
+
+        $createdAt = $this->timestamp($payload['createdAt'] ?? null);
+        $payloadDelay = $this->numericDelay($payload['delay'] ?? null);
+
+        if ($createdAt !== null && $payloadDelay !== null && $payloadDelay > 0) {
+            return $createdAt + $payloadDelay;
+        }
+
+        $commandDelay = $decodedCommand['delay'] ?? null;
+
+        if (is_numeric($commandDelay) && $pushedAt !== null && (float) $commandDelay > 0) {
+            return $pushedAt + (float) $commandDelay;
+        }
+
+        return $this->initialDelayedUntil($decodedCommand, $pushedAt, $delay);
     }
 
     private function releasedUntil(object $job, int $delay): ?float

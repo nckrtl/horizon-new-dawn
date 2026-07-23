@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use function NckRtl\HorizonNewDawn\Tests\Support\bindBrowserPageFixtures;
+use function NckRtl\HorizonNewDawn\Tests\Support\bindBrowserSupervisorScalingFixtures;
 
 describe('Horizon interface interactions', function (): void {
     beforeEach(function (): void {
@@ -59,6 +60,153 @@ describe('Horizon interface interactions', function (): void {
             ->assertScript('document.documentElement.classList.contains("dark")')
             ->assertNoJavaScriptErrors()
             ->assertNoConsoleLogs();
+    });
+
+    it('keeps predicted autoscaling active until the process count reaches its target', function (): void {
+        bindBrowserSupervisorScalingFixtures();
+
+        $page = visit('/horizon/instances')->assertSee('Instances');
+        $autoRefreshWasEnabled = $page->script(
+            '() => document.querySelector(\'[aria-label="Auto load new entries"]\')?.getAttribute(\'aria-pressed\') === \'true\'',
+        );
+
+        if (! $autoRefreshWasEnabled) {
+            $page->click('[aria-label="Auto load new entries"]');
+        }
+
+        $meters = $page->script(<<<'JS'
+            () => {
+                const meters = {}
+
+                for (const state of ['up']) {
+                    const meter = document.querySelector(`[data-scaling-state="${state}"]`)
+                    const cell = meter?.closest('td')
+                    const track = meter?.querySelector('[data-scaling-track]')
+                    const processCount = cell?.querySelector('[data-process-count]')
+                    const blocks = Array.from(meter?.querySelectorAll('[data-scaling-block]') ?? [])
+                    const meterRect = meter?.getBoundingClientRect()
+                    const trackRect = track?.getBoundingClientRect()
+                    const processCountRect = processCount?.getBoundingClientRect()
+                    const blockRects = blocks.map((block) => block.getBoundingClientRect())
+
+                    meters[state] = {
+                        blockCount: blocks.length,
+                        blockHeights: [...new Set(blocks.map((block) => getComputedStyle(block).height))],
+                        blockWidths: [...new Set(blocks.map((block) => getComputedStyle(block).width))],
+                        blocksDoNotFlex: blocks.every((block) => {
+                            const styles = getComputedStyle(block)
+
+                            return styles.flexGrow === '0' && styles.flexShrink === '0'
+                        }),
+                        blocksDoNotTransform: [...new Set(blocks.map((block) => getComputedStyle(block).transform))],
+                        vertical: new Set(blockRects.map((block) => Math.round(block.left))).size === 1
+                            && new Set(blockRects.map((block) => Math.round(block.top))).size === blocks.length,
+                        blockGaps: [...new Set(blockRects.slice(1).map(
+                            (block, index) => Math.round(block.top - blockRects[index].bottom),
+                        ))],
+                        gapFromCount: Math.round((trackRect?.left ?? 0) - (processCountRect?.right ?? 0)),
+                        trackFillsMeter: Math.abs((trackRect?.height ?? 0) - (meterRect?.height ?? 0)) < 0.5,
+                        topOffset: meter ? getComputedStyle(meter).top : '',
+                        bottomOffset: meter ? getComputedStyle(meter).bottom : '',
+                        animationNames: blocks.map((block) => getComputedStyle(block).animationName),
+                        animationDelays: [...new Set(blocks.map((block) => getComputedStyle(block).animationDelay))],
+                        animationDurations: [...new Set(blocks.map((block) => getComputedStyle(block).animationDuration))],
+                        blockOpacities: [...new Set(blocks.map((block) => getComputedStyle(block).opacity))],
+                        transitionDurations: [...new Set(blocks.map((block) => getComputedStyle(block).transitionDuration))],
+                    }
+                }
+
+                return meters
+            }
+        JS);
+
+        expect($meters)->toBe([
+            'up' => [
+                'blockCount' => 5,
+                'blockHeights' => ['3px'],
+                'blockWidths' => ['8px'],
+                'blocksDoNotFlex' => true,
+                'blocksDoNotTransform' => ['none'],
+                'vertical' => true,
+                'blockGaps' => [1],
+                'gapFromCount' => 8,
+                'trackFillsMeter' => true,
+                'topOffset' => '4px',
+                'bottomOffset' => '4px',
+                'animationNames' => ['none', 'none', 'none', 'none', 'none'],
+                'animationDelays' => ['0s'],
+                'animationDurations' => ['0s'],
+                'blockOpacities' => ['1'],
+                'transitionDurations' => ['0s'],
+            ],
+        ]);
+
+        $animationRepeated = $page->script(<<<'JS'
+            () => new Promise((resolve, reject) => {
+                const meter = document.querySelector('[data-scaling-state="up"]')
+                let sawFullMeter = false
+                const timeout = window.setTimeout(
+                    () => finish(new Error('Timed out waiting for the scaling animation to repeat.')),
+                    6000,
+                )
+                const observer = new MutationObserver(inspect)
+
+                function finish(error = null) {
+                    window.clearTimeout(timeout)
+                    observer.disconnect()
+
+                    if (error) {
+                        reject(error)
+                        return
+                    }
+
+                    resolve(true)
+                }
+
+                function inspect() {
+                    const filledBlocks = meter?.getAttribute('data-scaling-filled')
+
+                    if (filledBlocks === '5') {
+                        sawFullMeter = true
+                    } else if (sawFullMeter && filledBlocks === '1') {
+                        finish()
+                    }
+                }
+
+                if (! meter) {
+                    finish(new Error('The scaling indicator is missing.'))
+                    return
+                }
+
+                observer.observe(meter, {
+                    attributes: true,
+                    attributeFilter: ['data-scaling-filled'],
+                })
+                inspect()
+            })
+        JS);
+
+        expect($animationRepeated)->toBeTrue();
+
+        $page
+            ->assertAriaAttribute(
+                '[data-scaling-state="up"]',
+                'label',
+                'Scaling up from 6 processes to 7 processes. Time-based autoscaling with 4 ready jobs.',
+            )
+            ->hover('[data-scaling-state="up"]')
+            ->assertSee('Scaling up from 6 processes to 7 processes')
+            ->click('[aria-label="Auto load new entries"]')
+            ->assertMissing('[data-scaling-state]');
+
+        if ($autoRefreshWasEnabled) {
+            $page->click('[aria-label="Auto load new entries"]');
+        }
+
+        $page
+            ->assertNoJavaScriptErrors()
+            ->assertNoConsoleLogs()
+            ->assertNoAccessibilityIssues();
     });
 
     it('navigates through the mobile sidebar', function (): void {

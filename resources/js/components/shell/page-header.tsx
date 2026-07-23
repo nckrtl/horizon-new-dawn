@@ -26,7 +26,6 @@ export function SidebarFooterControls({
 }) {
   const page = usePage();
   const [activeRequestIds, setActiveRequestIds] = useState<Set<string>>(() => new Set());
-  const [refreshTurns, setRefreshTurns] = useState(0);
   const hasUnresolvedDeferredProps = Object.values(page.deferredProps ?? {}).some((props) =>
     props.some((prop) => page.props[prop] === undefined),
   );
@@ -38,7 +37,6 @@ export function SidebarFooterControls({
         return;
       }
 
-      setRefreshTurns((current) => current + 1);
       setActiveRequestIds((current) => new Set(current).add(event.detail.visit.id));
     });
     const stopListeningForFinishes = router.on("finish", (event) => {
@@ -78,10 +76,10 @@ export function SidebarFooterControls({
             >
               <RefreshCwIcon
                 className={cn(
-                  "text-muted-foreground transition-[rotate] duration-[1000ms] ease-linear motion-reduce:transition-none",
+                  "text-muted-foreground",
                   isLoading && "animate-spin motion-reduce:animate-none",
                 )}
-                style={{ rotate: `${autoLoad ? refreshTurns : 0}turn` }}
+                style={{ rotate: "0turn" }}
               />
               <span>Auto refresh</span>
             </SidebarMenuButton>

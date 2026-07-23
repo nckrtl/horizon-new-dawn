@@ -1,4 +1,4 @@
-import { usePage, usePoll } from "@inertiajs/react";
+import { router, usePage, usePoll } from "@inertiajs/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type AutoLoadItem = {
@@ -140,23 +140,28 @@ export function useAutoLoad<T extends AutoLoadItem = AutoLoadItem>({
     setHasNewEntries(false);
   }, []);
 
-  const poll = usePoll(
-    interval,
-    () => ({
-      data: { [cursor]: undefined },
-      only: Array.from(
-        new Set(
-          enabled
-            ? [prop, ...additionalProps, "horizon", "navigationCounts"]
-            : [prop, ...additionalProps],
-        ),
+  const requestOptions = () => ({
+    data: { [cursor]: undefined },
+    only: Array.from(
+      new Set(
+        enabled
+          ? [prop, ...additionalProps, "horizon", "navigationCounts"]
+          : [prop, ...additionalProps],
       ),
-      preserveUrl: true,
-      reset: [prop],
-      showProgress: false,
-    }),
-    { autoStart: false, mode: "cancel" },
-  );
+    ),
+    preserveUrl: true,
+    reset: [prop],
+    showProgress: false,
+  });
+  const requestOptionsRef = useRef(requestOptions);
+  const wasEnabledRef = useRef(enabled);
+
+  requestOptionsRef.current = requestOptions;
+
+  const poll = usePoll(interval, () => requestOptionsRef.current(), {
+    autoStart: false,
+    mode: "cancel",
+  });
   const pollRef = useRef(poll);
 
   pollRef.current = poll;
@@ -165,13 +170,19 @@ export function useAutoLoad<T extends AutoLoadItem = AutoLoadItem>({
     const controls = pollRef.current;
 
     if (polling && interval > 0) {
+      if (enabled && !wasEnabledRef.current) {
+        router.reload(requestOptionsRef.current());
+      }
+
       controls.start();
     } else {
       controls.stop();
     }
 
+    wasEnabledRef.current = enabled;
+
     return () => controls.stop();
-  }, [interval, polling]);
+  }, [enabled, interval, polling]);
 
   const scopeChanged = scopeRef.current !== scope;
 

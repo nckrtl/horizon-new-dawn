@@ -129,7 +129,13 @@ function FailedJobShow({ horizon, job }: FailedJobDetailPageProps) {
           },
         ]
       : []),
-    { label: "Queued at", value: timestamp(job.pushedAt) },
+    { label: "Created at", value: timestamp(job.pushedAt) },
+    ...(job.scheduledAt !== null
+      ? [{ label: "Scheduled at", value: timestamp(job.scheduledAt) }]
+      : []),
+    ...(job.originalScheduledAt !== null && job.originalScheduledAt !== job.scheduledAt
+      ? [{ label: "Originally scheduled at", value: timestamp(job.originalScheduledAt) }]
+      : []),
     ...(job.reservedAt !== null
       ? [{ label: "Reserved at", value: timestamp(job.reservedAt) }]
       : []),

@@ -100,6 +100,31 @@ describe('JobsData', function (): void {
         expect($page->items)->toHaveCount(1)->and($page->total)->toBe(1);
     });
 
+    it('reads completed and silenced jobs from oldest to newest', function (
+        JobListType $type,
+        string $key,
+        string $countMethod,
+    ): void {
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturnsFor($repository, 'getJobs', [['oldest', 'newest'], 0], new Collection([
+            horizonJob(0, 'oldest'),
+            horizonJob(1, 'newest'),
+        ]));
+        dashboardReturns($repository, $countMethod, 2);
+
+        $connection = mockDashboardContract(Connection::class);
+        dashboardReturnsFor($connection, 'zrevrange', [$key, 0, 49], ['oldest', 'newest']);
+        $redis = mockDashboardContract(RedisFactory::class);
+        dashboardReturnsFor($redis, 'connection', ['horizon'], $connection);
+
+        $page = (new JobsData($repository, $redis))->page($type, -1);
+
+        expect(array_column($page->items, 'id'))->toBe(['oldest', 'newest']);
+    })->with([
+        'completed' => [JobListType::Completed, 'completed_jobs', 'countCompleted'],
+        'silenced' => [JobListType::Silenced, 'silenced_jobs', 'countSilenced'],
+    ]);
+
     it('returns a safe detail payload without raw serialized commands', function (): void {
         $repository = mockDashboardContract(JobRepository::class);
         dashboardReturns($repository, 'getJobs', new Collection([horizonJob(0)]));
@@ -140,7 +165,8 @@ describe('JobsData', function (): void {
 
         expect($detail)->not->toBeNull()
             ->and($detail?->batchId)->toBe('batch-42')
-            ->and($detail?->delayedUntil)->toBe((float) $delayedUntil)
+            ->and($detail?->scheduledAt)->toBeNull()
+            ->and($detail?->originalScheduledAt)->toBe((float) $delayedUntil)
             ->and($data)->toBeArray()
             ->and($data['decodedCommand']['customerId'] ?? null)->toBe(42)
             ->and($data['decodedCommand']['delay']['class'] ?? null)->toBe('DateTimeImmutable')
@@ -165,10 +191,10 @@ describe('JobsData', function (): void {
         $detail = (new JobsData($repository))->find('job-1');
 
         expect($detail?->delay)->toBe(60)
-            ->and($detail?->delayedUntil)->toBe(1_784_281_460.5);
+            ->and($detail?->scheduledAt)->toBe(1_784_281_460.5);
     });
 
-    it('does not expose stale release availability after a job leaves the pending state', function (string $status): void {
+    it('separates the original schedule after a job leaves the pending state', function (string $status): void {
         $repository = mockDashboardContract(JobRepository::class);
         $job = horizonJob(0);
         $job->status = $status;
@@ -186,10 +212,11 @@ describe('JobsData', function (): void {
         $detail = (new JobsData($repository))->find('job-1');
 
         expect($detail?->delay)->toBe(60)
-            ->and($detail?->delayedUntil)->toBeNull();
+            ->and($detail?->scheduledAt)->toBeNull()
+            ->and($detail?->originalScheduledAt)->toBe(1_784_281_600.0);
     })->with(['reserved', 'completed']);
 
-    it('does not expose availability for a pending job without a positive release delay', function (): void {
+    it('keeps the active schedule after Horizon naturally migrates the job', function (): void {
         $repository = mockDashboardContract(JobRepository::class);
         $job = horizonJob(0);
         $job->status = 'pending';
@@ -207,7 +234,31 @@ describe('JobsData', function (): void {
         $detail = (new JobsData($repository))->find('job-1');
 
         expect($detail?->delay)->toBe(0)
-            ->and($detail?->delayedUntil)->toBeNull();
+            ->and($detail?->scheduledAt)->toBe(1_784_281_600.0)
+            ->and($detail?->originalScheduledAt)->toBe(1_784_281_600.0);
+    });
+
+    it('clears only the active schedule when the job was explicitly made available', function (): void {
+        $repository = mockDashboardContract(JobRepository::class);
+        $job = horizonJob(0);
+        $job->status = 'pending';
+        $job->delay = 0;
+        $job->payload = json_encode([
+            'displayName' => 'App\\Jobs\\ImportFeed',
+            'createdAt' => 1_784_281_000,
+            'pushedAt' => 1_784_281_000.25,
+            'delay' => 600,
+            'horizonNewDawn' => ['madeAvailableAt' => 1_784_281_300],
+            'data' => [
+                'command' => serialize((object) ['delay' => 600]),
+            ],
+        ], JSON_THROW_ON_ERROR);
+        dashboardReturns($repository, 'getJobs', new Collection([$job]));
+
+        $detail = (new JobsData($repository))->find('job-1');
+
+        expect($detail?->scheduledAt)->toBeNull()
+            ->and($detail?->originalScheduledAt)->toBe(1_784_281_600.0);
     });
 
     it('reads the release timestamp from Horizon when its job projection omits it', function (): void {
@@ -233,7 +284,7 @@ describe('JobsData', function (): void {
 
         $detail = app(JobsData::class)->find('job-1');
 
-        expect($detail?->delayedUntil)->toBe(1_784_281_590.25);
+        expect($detail?->scheduledAt)->toBe(1_784_281_590.25);
     });
 
     it('does not reuse the original command delay when a release timestamp is unavailable', function (): void {
@@ -253,7 +304,7 @@ describe('JobsData', function (): void {
         $detail = (new JobsData($repository))->find('job-1');
 
         expect($detail?->delay)->toBe(60)
-            ->and($detail?->delayedUntil)->toBeNull();
+            ->and($detail?->scheduledAt)->toBeNull();
     });
 
     it('keeps an initial numeric command delay relative to its pushed time', function (): void {
@@ -272,7 +323,59 @@ describe('JobsData', function (): void {
         $detail = (new JobsData($repository))->find('job-1');
 
         expect($detail?->delay)->toBe(120)
-            ->and($detail?->delayedUntil)->toBe(1_784_281_120.25);
+            ->and($detail?->scheduledAt)->toBe(1_784_281_120.25);
+    });
+
+    it('keeps the original scheduled timestamp after the job leaves the pending state', function (
+        string $status,
+    ): void {
+        $repository = mockDashboardContract(JobRepository::class);
+        $job = horizonJob(0);
+        $job->status = $status;
+        $job->delay = 0;
+        $job->payload = json_encode([
+            'displayName' => 'App\\Jobs\\ImportFeed',
+            'createdAt' => 1_784_281_000,
+            'pushedAt' => 1_784_281_000.25,
+            'delay' => 600,
+            'data' => [
+                'command' => serialize((object) ['delay' => 600]),
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $data = new JobsData($repository);
+        $row = $data->row($job);
+        $detail = $data->detail($job);
+
+        expect($row?->scheduledAt)->toBe($status === 'pending' ? 1_784_281_600.0 : null)
+            ->and($row?->originalScheduledAt)->toBe(1_784_281_600.0)
+            ->and($detail?->scheduledAt)->toBe($status === 'pending' ? 1_784_281_600.0 : null)
+            ->and($detail?->originalScheduledAt)->toBe(1_784_281_600.0);
+    })->with(['pending', 'reserved', 'completed', 'failed']);
+
+    it('does not treat inherited scheduling metadata on a retry as a new schedule', function (): void {
+        $repository = mockDashboardContract(JobRepository::class);
+        $job = horizonJob(0);
+        $job->status = 'pending';
+        $job->delay = 0;
+        $job->payload = json_encode([
+            'displayName' => 'App\\Jobs\\ImportFeed',
+            'retry_of' => 'failed-parent',
+            'createdAt' => 1_784_281_000,
+            'pushedAt' => 1_784_282_000.25,
+            'delay' => 0,
+            'data' => [
+                'command' => serialize((object) [
+                    'delay' => (new DateTimeImmutable('@1784281600'))
+                        ->setTimezone(new DateTimeZone('Europe/Amsterdam')),
+                ]),
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $row = (new JobsData($repository))->row($job);
+
+        expect($row?->retryOf)->toBe('failed-parent')
+            ->and($row?->scheduledAt)->toBeNull();
     });
 
     it('extracts a safe batch id from retained Horizon payloads', function (): void {

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace NckRtl\HorizonNewDawn;
 
 use Illuminate\Contracts\Foundation\CachesRoutes;
+use Illuminate\Contracts\Redis\Factory as RedisFactory;
 use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Horizon\Console\WorkCommand as HorizonWorkCommand;
+use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 use Laravel\Horizon\Contracts\WorkloadRepository;
 use Laravel\Horizon\Http\Controllers\HomeController as HorizonHomeController;
@@ -19,6 +21,8 @@ use NckRtl\HorizonNewDawn\Dashboard\DashboardPendingState;
 use NckRtl\HorizonNewDawn\Http\Controllers\HomeController;
 use NckRtl\HorizonNewDawn\Http\Middleware\HandleInertiaRequests;
 use NckRtl\HorizonNewDawn\Jobs\ForgetsPendingJob;
+use NckRtl\HorizonNewDawn\Jobs\JobsData;
+use NckRtl\HorizonNewDawn\Jobs\PendingJobPaginator;
 use NckRtl\HorizonNewDawn\Queues\ClearQueueMetadata;
 use NckRtl\HorizonNewDawn\Queues\ClearsQueueMetadata;
 use NckRtl\HorizonNewDawn\Support\FrameworkCapabilities;
@@ -37,6 +41,14 @@ final class HorizonNewDawnServiceProvider extends ServiceProvider
         $this->app->bind(HorizonHomeController::class, HomeController::class);
         $this->app->bind(ClearsQueueMetadata::class, ClearQueueMetadata::class);
         $this->app->bind(ForgetsPendingJob::class, ClearQueueMetadata::class);
+        $this->app->bind(
+            JobsData::class,
+            fn (): JobsData => new JobsData(
+                $this->app->make(JobRepository::class),
+                $this->app->make(RedisFactory::class),
+                $this->app->make(PendingJobPaginator::class),
+            ),
+        );
         $this->app->resolving(
             HorizonWorkCommand::class,
             function (HorizonWorkCommand $command): void {

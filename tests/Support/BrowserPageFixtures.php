@@ -276,6 +276,62 @@ function bindBrowserPageFixtures(): void
     });
 }
 
+function bindBrowserSupervisorScalingFixtures(): void
+{
+    bindBrowserPageFixtures();
+
+    $masters = mockDashboardContract(MasterSupervisorRepository::class);
+    dashboardReturns($masters, 'all', [
+        (object) [
+            'name' => 'horizon-web-01',
+            'environment' => 'production',
+            'pid' => 1204,
+            'status' => 'running',
+        ],
+    ]);
+    app()->instance(MasterSupervisorRepository::class, $masters);
+
+    $supervisors = mockDashboardContract(SupervisorRepository::class);
+    dashboardReturns($supervisors, 'all', [
+        browserScalingSupervisor('idle-above-minimum', 'idle-above-minimum', 6, 1, 10, 'time'),
+    ]);
+    app()->instance(SupervisorRepository::class, $supervisors);
+
+    $queue = mockDashboardContract(Queue::class);
+    dashboardReturnsUsing(
+        $queue,
+        'readyNow',
+        static fn (string $queueName): int => $queueName === 'idle-above-minimum' ? 4 : 0,
+    );
+    $queues = mockDashboardContract(QueueFactory::class);
+    dashboardReturns($queues, 'connection', $queue);
+    app()->instance(QueueFactory::class, $queues);
+}
+
+function browserScalingSupervisor(
+    string $name,
+    string $queue,
+    int $processes,
+    int $minProcesses,
+    int $maxProcesses,
+    string $strategy,
+): object {
+    return (object) [
+        'name' => "horizon-web-01:{$name}",
+        'master' => 'horizon-web-01',
+        'status' => 'running',
+        'processes' => ["redis:{$queue}" => $processes],
+        'options' => [
+            'connection' => 'redis',
+            'queue' => $queue,
+            'balance' => 'auto',
+            'minProcesses' => $minProcesses,
+            'maxProcesses' => $maxProcesses,
+            'autoScalingStrategy' => $strategy,
+        ],
+    ];
+}
+
 function bindBrowserInfiniteScrollRefreshFixtures(): void
 {
     bindBrowserPageFixtures();

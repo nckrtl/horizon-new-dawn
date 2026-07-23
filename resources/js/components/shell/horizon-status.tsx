@@ -43,7 +43,7 @@ export function HorizonStatus({
 
   const indicator = (
     <div
-      className="flex size-4 shrink-0 items-center justify-center text-muted-foreground data-[status=inactive]:opacity-60 data-[status=paused]:text-warn data-[status=unavailable]:text-destructive"
+      className="flex size-4 shrink-0 items-center justify-center text-muted-foreground data-[status=inactive]:opacity-60 data-[status=paused]:text-status-warning-icon data-[status=unavailable]:text-destructive"
       data-status={status}
       data-activity={status === "running" ? (isProcessing ? "working" : "idle") : undefined}
       role="status"

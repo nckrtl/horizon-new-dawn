@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAutoLoad } from "@/hooks/use-auto-load";
 
 const inertia = vi.hoisted(() => ({
+  reload: vi.fn(),
   start: vi.fn(),
   stop: vi.fn(),
   usePoll: vi.fn(),
@@ -12,12 +13,14 @@ const inertia = vi.hoisted(() => ({
 }));
 
 vi.mock("@inertiajs/react", () => ({
+  router: { reload: inertia.reload },
   usePoll: inertia.usePoll,
   usePage: () => ({ scrollProps: inertia.scrollProps }),
 }));
 
 describe("useAutoLoad", () => {
   beforeEach(() => {
+    inertia.reload.mockReset();
     inertia.start.mockReset();
     inertia.stop.mockReset();
     inertia.usePoll.mockReset();
@@ -61,6 +64,32 @@ describe("useAutoLoad", () => {
     expect(inertia.usePoll.mock.calls[0][1]()).toEqual({
       data: { starting_at: undefined },
       only: ["jobs", "summary"],
+      preserveUrl: true,
+      reset: ["jobs"],
+      showProgress: false,
+    });
+  });
+
+  it("refreshes the active list immediately when automatic insertion is enabled", () => {
+    const { rerender } = renderHook(
+      ({ enabled }) =>
+        useAutoLoad({
+          enabled,
+          prop: "jobs",
+          additionalProps: ["summary"],
+          interval: 1_000,
+        }),
+      { initialProps: { enabled: false } },
+    );
+
+    expect(inertia.reload).not.toHaveBeenCalled();
+
+    rerender({ enabled: true });
+
+    expect(inertia.reload).toHaveBeenCalledOnce();
+    expect(inertia.reload).toHaveBeenCalledWith({
+      data: { starting_at: undefined },
+      only: ["jobs", "summary", "horizon", "navigationCounts"],
       preserveUrl: true,
       reset: ["jobs"],
       showProgress: false,

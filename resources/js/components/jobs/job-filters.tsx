@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { pendingJobState } from "@/lib/pending-job-state";
 import type { JobListType, JobRow } from "@/types/jobs";
 
 const ALL_OPTIONS = "__all__";
@@ -69,6 +70,7 @@ export function matchesJobFilters(
   job: JobRow,
   filterKeys: readonly JobFilterKey[],
   values: JobFilterValues,
+  now = Date.now() / 1000,
 ): boolean {
   return filterKeys.every((filterKey) => {
     const filterValue = values[filterKey];
@@ -81,7 +83,7 @@ export function matchesJobFilters(
       return job.tags.includes(filterValue);
     }
 
-    return jobFilterValue(job, filterKey) === filterValue;
+    return jobFilterValue(job, filterKey, now) === filterValue;
   });
 }
 
@@ -170,6 +172,7 @@ function filterOptions(jobs: readonly JobRow[], filterKey: JobFilterKey): Filter
       { label: "Ready", value: "ready" },
       { label: "Reserved", value: "reserved" },
       { label: "Delayed", value: "delayed" },
+      { label: "Released", value: "released" },
     ];
   }
 
@@ -189,7 +192,7 @@ function filterOptions(jobs: readonly JobRow[], filterKey: JobFilterKey): Filter
       return job.tags.map((tag) => ({ label: tag, value: tag }));
     }
 
-    const value = jobFilterValue(job, filterKey);
+    const value = jobFilterValue(job, filterKey, Date.now() / 1000);
 
     return value === null ? [] : [{ label: value, value }];
   });
@@ -199,7 +202,11 @@ function filterOptions(jobs: readonly JobRow[], filterKey: JobFilterKey): Filter
   );
 }
 
-function jobFilterValue(job: JobRow, filterKey: Exclude<JobFilterKey, "tag">): string | null {
+function jobFilterValue(
+  job: JobRow,
+  filterKey: Exclude<JobFilterKey, "tag">,
+  now: number,
+): string | null {
   if (filterKey === "job") {
     return job.name;
   }
@@ -216,15 +223,7 @@ function jobFilterValue(job: JobRow, filterKey: Exclude<JobFilterKey, "tag">): s
     return job.retried ? "retried" : "not-retried";
   }
 
-  if (job.status === "reserved") {
-    return "reserved";
-  }
-
-  if (job.delay !== null && job.delay > 0) {
-    return "delayed";
-  }
-
-  return "ready";
+  return pendingJobState(job, now);
 }
 
 function FilterSelect({

@@ -1,5 +1,6 @@
 import { Link, router } from "@inertiajs/react";
 import { TriangleAlertIcon } from "lucide-react";
+import { useMemo } from "react";
 
 import { SortableTableHead } from "@/components/data-table/sortable-table-head";
 import { NewEntriesTableRow, TableNoticeRow } from "@/components/data-table/new-entries-alert";
@@ -25,19 +26,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { show as failedJobShow } from "@/generated/routes/horizon-new-dawn/failed-jobs";
 import { show as jobShow } from "@/generated/routes/horizon-new-dawn/jobs";
 import { useSortableRows, type SortColumn } from "@/hooks/use-sortable-rows";
-import { resolveHorizonRoute } from "@/lib/horizon-route";
+import { useScheduledJobClock } from "@/hooks/use-scheduled-job-clock";
 import { formatDuration, lowercaseFirst } from "@/lib/format-duration";
+import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { isInteractiveTarget } from "@/lib/interactive-target";
+import { pendingJobState, type PendingJobState } from "@/lib/pending-job-state";
 import { cn } from "@/lib/utils";
 import type { JobListType, JobRow } from "@/types/jobs";
 
-const columns: SortColumn<JobRow>[] = [
-  { key: "name", value: (job) => job.name },
-  { key: "status", value: pendingState },
-  { key: "pushedAt", value: (job) => job.pushedAt },
-  { key: "completedAt", value: (job) => job.completedAt },
-  { key: "runtime", value: (job) => job.runtime },
-];
 const emptyStateIcons = {
   pending: PendingJobsNavigationIcon,
   completed: CompletedJobsNavigationIcon,
@@ -55,6 +51,11 @@ const pendingStates = {
     description: "Reserved by a worker and awaiting processing.",
   },
   delayed: { label: "Delayed", variant: "delayed" },
+  released: {
+    label: "Released",
+    variant: "success",
+    description: "Its scheduled release time has passed and it is waiting for a worker.",
+  },
 } as const;
 const dateFormatter = new Intl.DateTimeFormat("sv-SE", {
   year: "numeric",
@@ -74,26 +75,16 @@ function directionFor(key: string, sort: { key: string; direction: "asc" | "desc
   return sort?.key === key ? sort.direction : undefined;
 }
 
-function pendingState(job: JobRow) {
-  if (job.status === "reserved") {
-    return "reserved";
-  }
-
-  if (job.delay !== null && job.delay > 0) {
-    return "delayed";
-  }
-
-  return "ready";
-}
-
-function pendingStateDescription(job: JobRow, state: keyof typeof pendingStates) {
+function pendingStateDescription(job: JobRow, state: PendingJobState, now: number) {
   if (state === "delayed") {
-    return job.delay === null
+    return job.scheduledAt === null
       ? "Scheduled to run later."
-      : `Scheduled to run in ${lowercaseFirst(formatDuration(job.delay))}.`;
+      : `Scheduled to run in ${lowercaseFirst(
+          formatDuration(Math.max(0, Math.ceil(job.scheduledAt - now))),
+        )}.`;
   }
 
-  return state === "ready" ? pendingStates.ready.description : pendingStates.reserved.description;
+  return pendingStates[state].description;
 }
 
 export function JobTable({
@@ -119,6 +110,17 @@ export function JobTable({
   emptyTitle?: string;
   emptyDescription?: string;
 }) {
+  const now = useScheduledJobClock(jobs);
+  const columns = useMemo<SortColumn<JobRow>[]>(
+    () => [
+      { key: "name", value: (job) => job.name },
+      { key: "status", value: (job) => pendingJobState(job, now) },
+      { key: "pushedAt", value: (job) => job.pushedAt },
+      { key: "completedAt", value: (job) => job.completedAt },
+      { key: "runtime", value: (job) => job.runtime },
+    ],
+    [now],
+  );
   const sorted = useSortableRows(jobs, columns, { persist: true });
   const compact = type === "pending";
 
@@ -200,7 +202,7 @@ export function JobTable({
           const retryOfUrl = job.retryOf
             ? resolveHorizonRoute(failedJobShow(job.retryOf), horizonBaseUrl).url
             : null;
-          const state = pendingState(job);
+          const state = pendingJobState(job, now);
           const pendingStateDetails = pendingStates[state];
 
           return (
@@ -243,7 +245,7 @@ export function JobTable({
                         {pendingStateDetails.label}
                       </Badge>
                     </TooltipTrigger>
-                    <TooltipContent>{pendingStateDescription(job, state)}</TooltipContent>
+                    <TooltipContent>{pendingStateDescription(job, state, now)}</TooltipContent>
                   </Tooltip>
                 </TableCell>
               ) : null}
@@ -253,7 +255,11 @@ export function JobTable({
               {compact ? (
                 <TableCell className="px-6 text-right">
                   {state !== "reserved" ? (
-                    <PendingJobActionsMenu jobId={job.id} horizonBaseUrl={horizonBaseUrl} />
+                    <PendingJobActionsMenu
+                      jobId={job.id}
+                      horizonBaseUrl={horizonBaseUrl}
+                      canRelease={state === "delayed"}
+                    />
                   ) : null}
                 </TableCell>
               ) : null}

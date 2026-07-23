@@ -69,7 +69,11 @@ function Dashboard({ horizon, summary, workload, supervisors }: DashboardPagePro
         </Card>
 
         {supervisors ? (
-          <SupervisorsTable supervisors={supervisors} horizonBaseUrl={horizon.baseUrl} />
+          <SupervisorsTable
+            autoRefreshEnabled={autoLoad}
+            supervisors={supervisors}
+            horizonBaseUrl={horizon.baseUrl}
+          />
         ) : null}
       </div>
     </>

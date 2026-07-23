@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import JobShow from "@/pages/jobs/show";
 import type { JobDetailPageProps } from "@/types/jobs";
@@ -24,7 +24,8 @@ const props: JobDetailPageProps = {
     attempts: 1,
     retryOf: null,
     delay: 600,
-    delayedUntil: 1_784_281_600,
+    scheduledAt: 2_000_000_000,
+    originalScheduledAt: 2_000_000_000,
     batchId: "batch-42",
     pushedAt: 1_784_281_000,
     reservedAt: null,
@@ -41,6 +42,10 @@ const props: JobDetailPageProps = {
 };
 
 describe("JobShow", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows job details and switches between data and tags", () => {
     render(<JobShow {...props} />);
 
@@ -48,7 +53,8 @@ describe("JobShow", () => {
       "href",
       "/horizon/batches/batch-42",
     );
-    expect(screen.getByText("Delayed Until")).toBeVisible();
+    expect(screen.getByText("Scheduled at")).toBeVisible();
+    expect(screen.getByText("Created at")).toBeVisible();
     expect(screen.getByText(/customerId/)).toBeVisible();
     fireEvent.click(screen.getByRole("tab", { name: "Tags1" }));
     expect(screen.getByText("tenant:1")).toBeVisible();
@@ -58,6 +64,43 @@ describe("JobShow", () => {
     expect(screen.queryByText("Attempts")).not.toBeInTheDocument();
     expect(screen.getByText("job-1").closest("dd")).toHaveClass("text-[13px]");
     expect(screen.getByRole("link", { name: "batch-42" })).toHaveClass("text-[13px]");
+  });
+
+  it("presents a scheduled pending job as released after its scheduled time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-23T08:00:00Z"));
+    const scheduledAt = Date.now() / 1000 + 5;
+
+    const { rerender } = render(
+      <JobShow
+        {...props}
+        job={{
+          ...props.job,
+          scheduledAt,
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("status", { name: "Job status: Delayed" })).toBeVisible();
+
+    act(() => {
+      vi.advanceTimersByTime(5_001);
+    });
+
+    expect(screen.getByRole("status", { name: "Job status: Released" })).toBeVisible();
+
+    rerender(
+      <JobShow
+        {...props}
+        job={{
+          ...props.job,
+          status: "reserved",
+          scheduledAt,
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("status", { name: "Job status: Reserved" })).toBeVisible();
   });
 
   it("offers the same cancellation action for normal ready and delayed jobs", () => {

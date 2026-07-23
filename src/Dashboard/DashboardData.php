@@ -23,6 +23,7 @@ use NckRtl\HorizonNewDawn\Dashboard\Data\FailurePreviewData;
 use NckRtl\HorizonNewDawn\Dashboard\Data\RecentFailuresData;
 use NckRtl\HorizonNewDawn\Dashboard\Data\SupervisorData;
 use NckRtl\HorizonNewDawn\Dashboard\Data\SupervisorGroupData;
+use NckRtl\HorizonNewDawn\Dashboard\Data\SupervisorScalingData;
 use NckRtl\HorizonNewDawn\Dashboard\Data\WorkloadItemData;
 use NckRtl\HorizonNewDawn\Dashboard\Data\WorkloadSplitData;
 use NckRtl\HorizonNewDawn\Instances\LocalInstanceName;
@@ -204,6 +205,12 @@ final readonly class DashboardData
         try {
             /** @var array<string, array{environment: ?string, pid: ?int, status: string, local: bool, items: array<int, SupervisorData>}> $groups */
             $groups = [];
+            /** @var array<string, Queue> $queueConnections */
+            $queueConnections = [];
+            /** @var array<string, int> $readyJobs */
+            $readyJobs = [];
+            /** @var array<string, float> $queueRuntimes */
+            $queueRuntimes = [];
 
             foreach ($this->masterSupervisors->all() as $master) {
                 $name = is_object($master) ? ($master->name ?? null) : null;
@@ -265,6 +272,14 @@ final readonly class DashboardData
                     processes: $processCount,
                     balancing: $balance,
                     status: $status,
+                    scaling: $this->supervisorScaling(
+                        options: $options,
+                        processes: $processes,
+                        status: $status,
+                        queueConnections: $queueConnections,
+                        readyJobs: $readyJobs,
+                        queueRuntimes: $queueRuntimes,
+                    ),
                 );
             }
 
@@ -301,6 +316,185 @@ final readonly class DashboardData
                 message: 'Horizon supervisors are currently unavailable.',
             );
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     * @param  array<string, mixed>  $processes
+     * @param  array<string, Queue>  $queueConnections
+     * @param  array<string, int>  $readyJobs
+     * @param  array<string, float>  $queueRuntimes
+     */
+    private function supervisorScaling(
+        array $options,
+        array $processes,
+        string $status,
+        array &$queueConnections,
+        array &$readyJobs,
+        array &$queueRuntimes,
+    ): ?SupervisorScalingData {
+        if (($options['balance'] ?? null) !== 'auto' || $status !== 'running') {
+            return null;
+        }
+
+        $connection = $options['connection'] ?? null;
+        if (! is_string($connection) || $connection === '') {
+            return null;
+        }
+
+        $processPools = $this->supervisorProcessPools($processes);
+
+        if ($processPools === []) {
+            return null;
+        }
+
+        try {
+            $queue = $queueConnections[$connection] ??= $this->queues->connection($connection);
+            $totalReadyJobs = 0;
+            $poolWorkloads = [];
+
+            foreach ($processPools as $pool => $processCount) {
+                $poolReadyJobs = 0;
+                $poolTimeToClear = 0.0;
+
+                foreach (explode(',', $pool) as $queueName) {
+                    $descriptor = $connection.':'.$queueName;
+                    $queueReadyJobs = $readyJobs[$descriptor] ??= (int) $queue->readyNow($queueName);
+                    $queueRuntime = $queueRuntimes[$queueName] ??= max(
+                        0.0,
+                        (float) $this->metrics->runtimeForQueue($queueName),
+                    );
+                    $poolReadyJobs += $queueReadyJobs;
+                    $poolTimeToClear += $queueReadyJobs * $queueRuntime;
+                }
+
+                $totalReadyJobs += $poolReadyJobs;
+                $poolWorkloads[$pool] = [
+                    'processes' => $processCount,
+                    'readyJobs' => $poolReadyJobs,
+                    'timeToClear' => $poolTimeToClear,
+                ];
+            }
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return null;
+        }
+
+        $strategy = ($options['autoScalingStrategy'] ?? null) === 'size' ? 'size' : 'time';
+        $currentProcesses = array_sum($processPools);
+        $targetProcesses = $this->projectedSupervisorProcesses(
+            options: $options,
+            poolWorkloads: $poolWorkloads,
+            strategy: $strategy,
+        );
+
+        return new SupervisorScalingData(
+            readyJobs: $totalReadyJobs,
+            state: match (true) {
+                $targetProcesses > $currentProcesses => SupervisorScalingState::Up,
+                $targetProcesses < $currentProcesses => SupervisorScalingState::Down,
+                default => SupervisorScalingState::Steady,
+            },
+            strategy: $strategy,
+            targetProcesses: $targetProcesses,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $processes
+     * @return array<string, int>
+     */
+    private function supervisorProcessPools(array $processes): array
+    {
+        $processPools = [];
+
+        foreach ($processes as $descriptor => $processCount) {
+            if (! is_numeric($processCount)) {
+                continue;
+            }
+
+            $pool = Str::after($descriptor, ':');
+
+            if ($pool !== '') {
+                $processPools[$pool] = max(0, (int) $processCount);
+            }
+        }
+
+        return $processPools;
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     * @param  array<string, array{processes: int, readyJobs: int, timeToClear: float}>  $poolWorkloads
+     */
+    private function projectedSupervisorProcesses(
+        array $options,
+        array $poolWorkloads,
+        string $strategy,
+    ): int {
+        $minimumProcesses = max(0, (int) ($options['minProcesses'] ?? 1));
+        $maximumProcesses = max(0, (int) ($options['maxProcesses'] ?? 1));
+        $maximumShift = max(0, (int) ($options['balanceMaxShift'] ?? 1));
+        $totalReadyJobs = array_sum(array_column($poolWorkloads, 'readyJobs'));
+        $totalTimeToClear = array_sum(array_column($poolWorkloads, 'timeToClear'));
+        $desiredProcesses = [];
+
+        foreach ($poolWorkloads as $pool => $workload) {
+            if ($totalTimeToClear > 0) {
+                $ratio = $strategy === 'size'
+                    ? $workload['readyJobs'] / max(1, $totalReadyJobs)
+                    : $workload['timeToClear'] / $totalTimeToClear;
+                $desiredProcesses[$pool] = $ratio * $maximumProcesses;
+
+                continue;
+            }
+
+            $desiredProcesses[$pool] = $workload['readyJobs'] > 0
+                ? $maximumProcesses
+                : $minimumProcesses;
+        }
+
+        asort($desiredProcesses);
+
+        $projectedProcesses = array_sum(array_column($poolWorkloads, 'processes'));
+        $maximumPoolProcesses = max(
+            $minimumProcesses,
+            $maximumProcesses - ((count($poolWorkloads) - 1) * $minimumProcesses),
+        );
+
+        foreach ($desiredProcesses as $pool => $desiredPoolProcesses) {
+            $currentPoolProcesses = $poolWorkloads[$pool]['processes'];
+            $desiredPoolProcesses = (int) ceil($desiredPoolProcesses);
+
+            if ($desiredPoolProcesses > $currentPoolProcesses) {
+                $upShift = min(
+                    max(0, $maximumProcesses - $projectedProcesses),
+                    $maximumShift,
+                );
+                $nextPoolProcesses = min(
+                    $currentPoolProcesses + $upShift,
+                    $maximumPoolProcesses,
+                    $desiredPoolProcesses,
+                );
+            } elseif ($desiredPoolProcesses < $currentPoolProcesses) {
+                $downShift = min(
+                    max(0, $projectedProcesses - $minimumProcesses),
+                    $maximumShift,
+                );
+                $nextPoolProcesses = max(
+                    $currentPoolProcesses - $downShift,
+                    $minimumProcesses,
+                    $desiredPoolProcesses,
+                );
+            } else {
+                continue;
+            }
+
+            $projectedProcesses += $nextPoolProcesses - $currentPoolProcesses;
+        }
+
+        return $projectedProcesses;
     }
 
     /** @param array<string, mixed> $processes */

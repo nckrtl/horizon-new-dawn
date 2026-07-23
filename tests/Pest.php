@@ -12,6 +12,7 @@ require_once __DIR__.'/Support/DashboardMocks.php';
 require_once __DIR__.'/Support/BrowserPageFixtures.php';
 require_once __DIR__.'/Support/HorizonBatches.php';
 require_once __DIR__.'/Support/HorizonJobs.php';
+require_once __DIR__.'/Support/PendingJobOrdering.php';
 
 pest()->extend(TestCase::class)->in('Compatibility', 'Feature', 'Unit');
 pest()->extend(BrowserTestCase::class)->in('Browser');

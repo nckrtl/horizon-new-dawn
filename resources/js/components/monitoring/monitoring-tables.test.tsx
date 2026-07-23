@@ -24,6 +24,8 @@ const job: JobRow = {
   attempts: 0,
   retryOf: null,
   delay: 60,
+  scheduledAt: 1_784_281_060,
+  originalScheduledAt: 1_784_281_060,
   pushedAt: 1_784_281_000,
   reservedAt: null,
   completedAt: null,

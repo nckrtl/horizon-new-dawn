@@ -242,14 +242,14 @@ function QueueStatistics({
         </OverviewStatLink>
       </div>
       <div className="grid gap-px border-t border-separator bg-separator sm:grid-cols-2 md:grid-cols-4">
-        <QueueMetric label="Total Processes" value={summary.processes ?? "—"} />
+        <QueueMetric label="Total processes" value={summary.processes ?? "—"} />
         {summary.waitThreshold ? (
           <QueueWaitThresholdMetric waitThreshold={summary.waitThreshold} />
         ) : (
           <QueueMetric label="Wait threshold" value="—" />
         )}
         <QueueMetric
-          label="Average Job Runtime"
+          label="Average job runtime"
           value={
             summary.averageRuntime === null
               ? "—"

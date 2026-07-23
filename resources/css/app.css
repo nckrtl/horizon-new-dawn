@@ -170,8 +170,8 @@
   --status-processing-foreground: #1d4ed8;
   --status-retry: var(--color-pink-100);
   --status-retry-foreground: var(--color-pink-700);
-  --status-paused: #ffedd5;
-  --status-paused-foreground: #9a3412;
+  --status-paused: var(--status-delayed);
+  --status-paused-foreground: var(--status-delayed-foreground);
   --status-inactive: #3f3f46;
   --status-unavailable: #fee2e2;
   --status-unavailable-foreground: var(--destructive);
@@ -249,8 +249,8 @@
   --status-processing-foreground: var(--color-blue-400);
   --status-retry: color-mix(in oklab, var(--color-pink-800) 70%, var(--card) 30%);
   --status-retry-foreground: var(--color-pink-300);
-  --status-paused: color-mix(in oklab, var(--color-orange-900) 70%, var(--card) 30%);
-  --status-paused-foreground: var(--color-orange-400);
+  --status-paused: var(--status-delayed);
+  --status-paused-foreground: var(--status-delayed-foreground);
   --status-inactive: color-mix(in oklab, var(--background) 60%, var(--foreground) 40%);
   --status-unavailable: color-mix(in oklab, var(--color-red-800) 70%, var(--card) 30%);
   --status-unavailable-foreground: var(--color-red-300);

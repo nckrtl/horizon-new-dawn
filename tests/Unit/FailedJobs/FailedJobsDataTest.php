@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Illuminate\Contracts\Redis\Factory as RedisFactory;
+use Illuminate\Redis\Connections\Connection;
 use Illuminate\Support\Collection;
 use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\TagRepository;
@@ -170,6 +172,55 @@ describe('FailedJobsData', function (): void {
             ->and($page->total)->toBe(51)
             ->and($page->current)->toBe(50)
             ->and($page->next)->toBeNull();
+    });
+
+    it('reads failed jobs from oldest to newest', function (): void {
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturns($repository, 'countFailed', 2);
+        dashboardReturnsFor($repository, 'getJobs', [['oldest', 'newest'], 0], new Collection([
+            horizonJob(0, 'oldest'),
+            horizonJob(1, 'newest'),
+        ]));
+
+        $connection = mockDashboardContract(Connection::class);
+        dashboardReturnsFor($connection, 'zrevrange', ['failed_jobs', 0, 49], ['oldest', 'newest']);
+        $redis = mockDashboardContract(RedisFactory::class);
+        dashboardReturnsFor($redis, 'connection', ['horizon'], $connection);
+
+        $page = (new FailedJobsData(
+            $repository,
+            mockDashboardContract(TagRepository::class),
+            new JobsData($repository),
+            new FailedJobRetryEligibility,
+            $redis,
+        ))->page(-1);
+
+        expect(array_column($page->items, 'id'))->toBe(['oldest', 'newest']);
+    });
+
+    it('reads tag-filtered failed jobs from oldest to newest', function (): void {
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturnsFor($repository, 'getJobs', [['oldest', 'newest'], 0], new Collection([
+            horizonJob(0, 'oldest'),
+            horizonJob(1, 'newest'),
+        ]));
+
+        $tags = mockDashboardContract(TagRepository::class);
+        dashboardReturnsFor($tags, 'count', ['failed:tenant:42'], 2);
+        $connection = mockDashboardContract(Connection::class);
+        dashboardReturnsFor($connection, 'zrange', ['failed:tenant:42', 0, 49], ['oldest', 'newest']);
+        $redis = mockDashboardContract(RedisFactory::class);
+        dashboardReturnsFor($redis, 'connection', ['horizon'], $connection);
+
+        $page = (new FailedJobsData(
+            $repository,
+            $tags,
+            new JobsData($repository),
+            new FailedJobRetryEligibility,
+            $redis,
+        ))->page(0, 'tenant:42');
+
+        expect(array_column($page->items, 'id'))->toBe(['oldest', 'newest']);
     });
 
     it('returns a failed detail with safe payload context and exception text', function (): void {

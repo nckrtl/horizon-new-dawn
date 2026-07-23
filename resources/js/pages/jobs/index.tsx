@@ -8,6 +8,7 @@ import { PendingJobsActions } from "@/components/jobs/pending-jobs-actions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAutoLoad } from "@/hooks/use-auto-load";
 import { useJobFilters } from "@/hooks/use-job-filters";
+import { useScheduledJobClock } from "@/hooks/use-scheduled-job-clock";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
 import type { JobsPageProps } from "@/types/jobs";
 
@@ -38,7 +39,8 @@ function JobsContent({ horizon, type, pendingCounts, jobs }: JobsPageProps) {
     additionalProps: type === "pending" ? pendingRefreshProps : undefined,
     scope: type,
   });
-  const jobFilters = useJobFilters(type, refreshedJobs.items);
+  const now = useScheduledJobClock(refreshedJobs.items);
+  const jobFilters = useJobFilters(type, refreshedJobs.items, now);
   const visibleJobs = useMemo(() => {
     const query = deferredSearch.trim().toLocaleLowerCase();
 

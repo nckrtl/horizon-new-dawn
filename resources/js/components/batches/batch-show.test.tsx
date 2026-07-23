@@ -29,6 +29,8 @@ function job(
     attempts: 1,
     retryOf: null,
     delay: null,
+    scheduledAt: null,
+    originalScheduledAt: null,
     pushedAt: 1_784_281_000 + index,
     reservedAt: status === "pending" ? null : 1_784_281_001 + index,
     completedAt: status === "completed" ? 1_784_281_002 + index : null,

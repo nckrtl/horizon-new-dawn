@@ -13,9 +13,11 @@ import { show as failedJobShow } from "@/generated/routes/horizon-new-dawn/faile
 import { show as queueShow } from "@/generated/routes/horizon-new-dawn/queues";
 import { useActiveTabQuery } from "@/hooks/use-active-tab-query";
 import { usePageRefresh } from "@/hooks/use-dashboard-refresh";
+import { useScheduledJobClock } from "@/hooks/use-scheduled-job-clock";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
 import { formatRuntime } from "@/lib/format-duration";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
+import { pendingJobState } from "@/lib/pending-job-state";
 import { currentQueryParameter } from "@/lib/url-query";
 import type { JobDetailPageProps } from "@/types/jobs";
 
@@ -40,7 +42,8 @@ function JobShow({ horizon, type, job }: JobDetailPageProps) {
 
   usePageRefresh(horizon.pollInterval, jobRefreshProps, autoLoad);
 
-  const status = jobDetailStatus(type, job);
+  const now = useScheduledJobClock([job]);
+  const status = jobDetailStatus(type, job, now);
   const retryOfUrl = job.retryOf
     ? resolveHorizonRoute(failedJobShow(job.retryOf), horizon.baseUrl).url
     : null;
@@ -105,9 +108,12 @@ function JobShow({ horizon, type, job }: JobDetailPageProps) {
           },
         ]
       : []),
-    { label: "Queued at", value: timestamp(job.pushedAt) },
-    ...(job.delayedUntil !== null
-      ? [{ label: "Delayed Until", value: timestamp(job.delayedUntil) }]
+    { label: "Created at", value: timestamp(job.pushedAt) },
+    ...(job.scheduledAt !== null
+      ? [{ label: "Scheduled at", value: timestamp(job.scheduledAt) }]
+      : []),
+    ...(job.originalScheduledAt !== null && job.originalScheduledAt !== job.scheduledAt
+      ? [{ label: "Originally scheduled at", value: timestamp(job.originalScheduledAt) }]
       : []),
     ...(job.reservedAt !== null
       ? [{ label: "Reserved at", value: timestamp(job.reservedAt) }]
@@ -142,7 +148,12 @@ function JobShow({ horizon, type, job }: JobDetailPageProps) {
             </CardTitle>
             {type === "pending" && job.status === "pending" && job.batchId === null ? (
               <div className="flex shrink-0 items-center">
-                <PendingJobActionsMenu jobId={job.id} horizonBaseUrl={horizon.baseUrl} />
+                <PendingJobActionsMenu
+                  jobId={job.id}
+                  horizonBaseUrl={horizon.baseUrl}
+                  canCancel={job.batchId === null}
+                  canRelease={status === "delayed"}
+                />
               </div>
             ) : null}
           </CardHeader>
@@ -164,6 +175,7 @@ function JobShow({ horizon, type, job }: JobDetailPageProps) {
 function jobDetailStatus(
   type: JobDetailPageProps["type"],
   job: JobDetailPageProps["job"],
+  now: number,
 ): JobStatusValue {
   if (job.status === "completed") {
     return type === "silenced" ? "silenced" : "completed";
@@ -185,7 +197,7 @@ function jobDetailStatus(
     return "silenced";
   }
 
-  return job.delayedUntil !== null ? "delayed" : "ready";
+  return pendingJobState(job, now);
 }
 
 function JobDataTabs({

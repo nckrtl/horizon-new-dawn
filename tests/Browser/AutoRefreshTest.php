@@ -34,12 +34,15 @@ describe('automatic refresh', function (): void {
     });
 
     it('polls infinite-scroll job data as authoritative state', function (): void {
-        $page = visit('/horizon/jobs/pending');
+        $page = visit('/horizon/jobs/pending')
+            ->assertPresent('[aria-label="Auto load new entries"]');
 
         $pollMetadata = $page->script(<<<'JS'
             () => new Promise((resolve, reject) => {
                 let mergeIntent = null
                 let reset = null
+                let pressedBeforeEnable = null
+                let startedAt = null
                 const setRequestHeader = XMLHttpRequest.prototype.setRequestHeader
                 const timeout = window.setTimeout(() => {
                     document.removeEventListener('inertia:success', onSuccess)
@@ -63,6 +66,8 @@ describe('automatic refresh', function (): void {
                     resolve({
                         mergeIntent,
                         reset,
+                        pressedBeforeEnable,
+                        elapsedMilliseconds: startedAt === null ? null : Date.now() - startedAt,
                     })
                 }
 
@@ -82,7 +87,9 @@ describe('automatic refresh', function (): void {
                     }
 
                     document.addEventListener('inertia:success', onSuccess)
-                    document.querySelector('[aria-label="Auto load new entries"]')?.click()
+                    startedAt = Date.now()
+                    pressedBeforeEnable = toggle?.getAttribute('aria-pressed')
+                    toggle?.click()
                 }
 
                 if (toggle?.getAttribute('aria-pressed') === 'true') {
@@ -94,10 +101,11 @@ describe('automatic refresh', function (): void {
             })
         JS);
 
-        expect($pollMetadata)->toBe([
+        expect($pollMetadata)->toMatchArray([
             'mergeIntent' => null,
             'reset' => 'jobs',
-        ]);
+            'pressedBeforeEnable' => 'false',
+        ])->and($pollMetadata['elapsedMilliseconds'])->toBeLessThan(1000);
 
         $page
             ->assertNoJavaScriptErrors()

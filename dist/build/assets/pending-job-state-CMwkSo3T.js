@@ -1,0 +1,1 @@
+function e(e,t){return e.status===`reserved`?`reserved`:e.scheduledAt===null?`ready`:e.scheduledAt>t?`delayed`:`released`}export{e as t};

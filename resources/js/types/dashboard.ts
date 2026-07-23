@@ -67,6 +67,12 @@ export type SupervisorItem = {
   processes: number;
   balancing: string;
   status: string;
+  scaling?: {
+    readyJobs: number;
+    state: "up" | "down" | "steady";
+    strategy: "time" | "size";
+    targetProcesses: number;
+  } | null;
 };
 
 export type DashboardSupervisors = {
