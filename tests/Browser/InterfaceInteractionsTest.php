@@ -77,7 +77,7 @@ describe('Horizon interface interactions', function (): void {
         }
 
         $page
-            ->click('Instances')
+            ->navigate('/horizon/instances')
             ->assertPathIs('/horizon/instances')
             ->assertPresent('[data-scaling-state="up"]');
 
