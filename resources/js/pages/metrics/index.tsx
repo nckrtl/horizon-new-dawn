@@ -10,10 +10,13 @@ import { MetricsTable } from "@/components/metrics/metrics-table";
 import { TabbedResultsCard, type TabbedResultsTab } from "@/components/tabbed-results-card";
 import { index as metricsIndex } from "@/generated/routes/horizon-new-dawn/metrics";
 import { useActiveTabQuery } from "@/hooks/use-active-tab-query";
+import { usePageRefresh } from "@/hooks/use-dashboard-refresh";
+import { useAutoLoadPreference } from "@/layouts/horizon-layout";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import type { MetricsPageProps, MetricType } from "@/types/metrics";
 
 function MetricsIndex({ horizon, type, metrics }: MetricsPageProps) {
+  const { autoLoad } = useAutoLoadPreference();
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<MetricFilterValues>({ ...emptyMetricFilterValues });
   const visibleMetrics = useMemo(() => {
@@ -39,6 +42,7 @@ function MetricsIndex({ horizon, type, metrics }: MetricsPageProps) {
   let emptyDescription: string | undefined;
 
   useActiveTabQuery(type);
+  usePageRefresh(horizon.pollInterval, metricRefreshProps, autoLoad);
 
   if (hasSearch && hasFilters) {
     emptyDescription = `No ${singular} metrics match your search and filters.`;
@@ -76,6 +80,8 @@ function MetricsIndex({ horizon, type, metrics }: MetricsPageProps) {
     </>
   );
 }
+
+const metricRefreshProps = ["metrics"];
 
 function matchesThroughputFilter(value: number, filter: MetricFilterValues["throughput"]): boolean {
   if (filter === null) {

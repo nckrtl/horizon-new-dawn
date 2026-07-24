@@ -34,17 +34,22 @@ final readonly class FailedJobsData
             $tag = trim($tag ?? '');
 
             if ($tag === '') {
-                $failed = $this->oldestFailed($afterIndex);
+                $page = $this->oldestFailed($afterIndex);
+                $failed = $page['jobs'];
                 $total = $this->repository->countFailed();
                 $current = $afterIndex;
-                $next = $failed->count() === self::PAGE_SIZE ? $this->lastIndex($failed) : null;
+                $next = $page['next'];
             } else {
                 $current = max(0, $afterIndex);
                 $ids = $this->oldestTaggedFailed($tag, $current);
-                $jobIds = array_values(array_filter($ids, is_string(...)));
+                $hasMore = count($ids) > self::PAGE_SIZE;
+                $jobIds = array_values(array_filter(
+                    array_slice($ids, 0, self::PAGE_SIZE),
+                    is_string(...),
+                ));
                 $failed = $this->repository->getJobs($jobIds, $current);
                 $total = $this->tags->count("failed:{$tag}");
-                $next = count($ids) === self::PAGE_SIZE ? $current + self::PAGE_SIZE : null;
+                $next = $hasMore ? $current + self::PAGE_SIZE : null;
             }
 
             $items = [];
@@ -86,6 +91,10 @@ final readonly class FailedJobsData
     public function hasRetryable(): bool
     {
         try {
+            if ($this->redis !== null) {
+                return $this->hasRetryableFromRawIndex();
+            }
+
             $afterIndex = -1;
 
             while (true) {
@@ -137,9 +146,9 @@ final readonly class FailedJobsData
     public function find(string $id): ?FailedJobDetailData
     {
         try {
-            $job = $this->repository->getJobs([$id])->first();
+            $job = $this->repository->findFailed($id);
 
-            if (! is_object($job)) {
+            if (! is_object($job) || ($job->status ?? null) !== 'failed') {
                 return null;
             }
 
@@ -183,44 +192,98 @@ final readonly class FailedJobsData
         }
     }
 
-    /** @return Collection<int, mixed> */
-    private function oldestFailed(int $afterIndex): Collection
+    /**
+     * @return array{jobs: Collection<int, mixed>, next: int|null}
+     */
+    private function oldestFailed(int $afterIndex): array
     {
         if ($this->redis === null) {
-            return $this->repository->getFailed((string) $afterIndex);
+            $failed = $this->repository->getFailed((string) $afterIndex);
+
+            return [
+                'jobs' => $failed,
+                'next' => $failed->count() === self::PAGE_SIZE ? $this->lastIndex($failed) : null,
+            ];
         }
 
         $start = $afterIndex + 1;
         $ids = $this->redis->connection('horizon')->zrevrange(
             'failed_jobs',
             $start,
-            $start + self::PAGE_SIZE - 1,
+            $start + self::PAGE_SIZE,
         );
 
         if (! is_array($ids)) {
-            return new Collection;
+            return ['jobs' => new Collection, 'next' => null];
         }
 
-        return $this->repository->getJobs(
-            array_values(array_filter($ids, is_string(...))),
-            $start,
-        );
+        $hasMore = count($ids) > self::PAGE_SIZE;
+        $ids = array_slice($ids, 0, self::PAGE_SIZE);
+
+        return [
+            'jobs' => $this->repository->getJobs(
+                array_values(array_filter($ids, is_string(...))),
+                $start,
+            ),
+            'next' => $hasMore ? $start + self::PAGE_SIZE - 1 : null,
+        ];
     }
 
     /** @return array<int, mixed> */
     private function oldestTaggedFailed(string $tag, int $startingAt): array
     {
         if ($this->redis === null) {
-            return $this->tags->paginate("failed:{$tag}", $startingAt, self::PAGE_SIZE);
+            return $this->tags->paginate("failed:{$tag}", $startingAt, self::PAGE_SIZE + 1);
         }
 
         $ids = $this->redis->connection('horizon')->zrange(
             "failed:{$tag}",
             $startingAt,
-            $startingAt + self::PAGE_SIZE - 1,
+            $startingAt + self::PAGE_SIZE,
         );
 
         return is_array($ids) ? array_values($ids) : [];
+    }
+
+    private function hasRetryableFromRawIndex(): bool
+    {
+        $startingAt = 0;
+        $connection = $this->redis?->connection('horizon');
+
+        if ($connection === null) {
+            return false;
+        }
+
+        while (true) {
+            $ids = $connection->zrevrange(
+                'failed_jobs',
+                $startingAt,
+                $startingAt + self::PAGE_SIZE,
+            );
+
+            if (! is_array($ids) || $ids === []) {
+                return false;
+            }
+
+            $hasMore = count($ids) > self::PAGE_SIZE;
+            $pageIds = array_values(array_filter(
+                array_slice($ids, 0, self::PAGE_SIZE),
+                is_string(...),
+            ));
+            $failed = $this->repository->getJobs($pageIds, $startingAt);
+
+            foreach ($failed as $job) {
+                if (is_object($job) && $this->retryEligibility->allowsBulk($job)) {
+                    return true;
+                }
+            }
+
+            if (! $hasMore) {
+                return false;
+            }
+
+            $startingAt += self::PAGE_SIZE;
+        }
     }
 
     /** @param Collection<int, mixed> $jobs */

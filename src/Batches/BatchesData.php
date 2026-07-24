@@ -7,11 +7,10 @@ namespace NckRtl\HorizonNewDawn\Batches;
 use DateTimeInterface;
 use Illuminate\Bus\Batch;
 use Illuminate\Bus\BatchRepository;
-use Illuminate\Database\ConnectionResolverInterface;
-use Illuminate\Database\Query\Builder;
 use NckRtl\HorizonNewDawn\Batches\Data\BatchDetailData;
 use NckRtl\HorizonNewDawn\Batches\Data\BatchPageData;
 use NckRtl\HorizonNewDawn\Batches\Data\BatchRowData;
+use RuntimeException;
 use Throwable;
 
 final readonly class BatchesData
@@ -21,7 +20,6 @@ final readonly class BatchesData
     public function __construct(
         private BatchRepository $batches,
         private BatchJobsData $batchJobs,
-        private ConnectionResolverInterface $database,
     ) {}
 
     public function page(
@@ -32,7 +30,11 @@ final readonly class BatchesData
         ?BatchCreatedRange $created = null,
     ): BatchPageData {
         try {
-            if ($queue !== null || $connection !== null || $created !== null) {
+            if (($query !== null && trim($query) !== '')
+                || $queue !== null
+                || $connection !== null
+                || $created !== null
+            ) {
                 [$batches, $next] = $this->filteredPage(
                     $beforeId,
                     $query,
@@ -41,12 +43,7 @@ final readonly class BatchesData
                     $created,
                 );
             } else {
-                $batches = $query === null || trim($query) === ''
-                    ? $this->batches->get(self::PAGE_SIZE, $beforeId)
-                    : $this->search(trim($query), $beforeId);
-                $next = count($batches) === self::PAGE_SIZE
-                    ? $batches[count($batches) - 1]->id
-                    : null;
+                [$batches, $next] = $this->repositoryPage($beforeId);
             }
 
             $rows = array_values(array_map($this->row(...), $batches));
@@ -69,44 +66,6 @@ final readonly class BatchesData
                 message: 'Batches are currently unavailable.',
             );
         }
-    }
-
-    /** @return array<int, Batch> */
-    public function search(string $query, ?string $beforeId): array
-    {
-        $escapedQuery = str_replace(['%', '_'], ['\%', '\_'], $query);
-        $database = config('queue.batching.database');
-        $table = config('queue.batching.table', 'job_batches');
-        $builder = $this->database
-            ->connection(is_string($database) ? $database : null)
-            ->table(is_string($table) ? $table : 'job_batches')
-            ->where(function (Builder $builder) use ($escapedQuery): void {
-                $builder
-                    ->where('name', 'like', "%{$escapedQuery}%")
-                    ->orWhere('id', 'like', "%{$escapedQuery}%");
-            })
-            ->orderByDesc('id')
-            ->limit(self::PAGE_SIZE);
-
-        if ($beforeId !== null && $beforeId !== '') {
-            $builder->where('id', '<', $beforeId);
-        }
-
-        $batches = [];
-
-        foreach ($builder->pluck('id') as $id) {
-            if (! is_string($id)) {
-                continue;
-            }
-
-            $batch = $this->batches->find($id);
-
-            if ($batch !== null) {
-                $batches[] = $batch;
-            }
-        }
-
-        return $batches;
     }
 
     public function find(string $id): ?BatchDetailData
@@ -226,6 +185,26 @@ final readonly class BatchesData
     }
 
     /** @return array{0: array<int, Batch>, 1: ?string} */
+    private function repositoryPage(?string $beforeId): array
+    {
+        $batches = [];
+        $cursor = $beforeId;
+
+        while (count($batches) < self::PAGE_SIZE) {
+            $candidates = $this->batches->get(self::PAGE_SIZE - count($batches), $cursor);
+
+            if ($candidates === []) {
+                return [$batches, null];
+            }
+
+            $cursor = $this->advanceCursor($candidates, $cursor);
+            array_push($batches, ...$candidates);
+        }
+
+        return [$batches, $cursor];
+    }
+
+    /** @return array{0: array<int, Batch>, 1: ?string} */
     private function filteredPage(
         ?string $beforeId,
         ?string $query,
@@ -237,8 +216,14 @@ final readonly class BatchesData
         $cursor = $beforeId;
         $cutoff = $created?->cutoffTimestamp();
 
-        do {
+        while (true) {
             $candidates = $this->batches->get(self::PAGE_SIZE, $cursor);
+
+            if ($candidates === []) {
+                return [$matches, null];
+            }
+
+            $nextCursor = $this->advanceCursor($candidates, $cursor);
 
             foreach ($candidates as $batch) {
                 $cursor = $batch->id;
@@ -253,9 +238,29 @@ final readonly class BatchesData
                     return [$matches, $cursor];
                 }
             }
-        } while (count($candidates) === self::PAGE_SIZE);
 
-        return [$matches, null];
+            $cursor = $nextCursor;
+        }
+    }
+
+    /**
+     * @param  array<int, Batch>  $batches
+     */
+    private function advanceCursor(array $batches, ?string $current): string
+    {
+        $batch = end($batches);
+
+        if (! $batch instanceof Batch) {
+            throw new RuntimeException('The batch repository returned an empty page.');
+        }
+
+        $cursor = $batch->id;
+
+        if ($cursor === '' || ($current !== null && strcmp($cursor, $current) >= 0)) {
+            throw new RuntimeException('The batch repository did not advance its pagination cursor.');
+        }
+
+        return $cursor;
     }
 
     private function matchesFilters(

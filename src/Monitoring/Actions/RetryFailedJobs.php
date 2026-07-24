@@ -7,6 +7,7 @@ namespace NckRtl\HorizonNewDawn\Monitoring\Actions;
 use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\TagRepository;
 use NckRtl\HorizonNewDawn\FailedJobs\Actions\RetryFailedJob;
+use NckRtl\HorizonNewDawn\Monitoring\MonitoringTagGuard;
 
 final readonly class RetryFailedJobs
 {
@@ -16,10 +17,13 @@ final readonly class RetryFailedJobs
         private TagRepository $tags,
         private JobRepository $jobs,
         private RetryFailedJob $retry,
+        private MonitoringTagGuard $guard,
     ) {}
 
     public function handle(string $tag): int
     {
+        $this->guard->ensureMonitored($this->tags, $tag);
+
         $repositoryTag = "failed:{$tag}";
         $startingAt = 0;
         $scheduled = 0;

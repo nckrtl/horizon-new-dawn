@@ -6,7 +6,6 @@ use Illuminate\Bus\Batch;
 use Illuminate\Bus\BatchRepository;
 use Illuminate\Cache\CacheManager;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
-use Illuminate\Database\ConnectionResolverInterface;
 use Laravel\Horizon\Contracts\JobRepository;
 use NckRtl\HorizonNewDawn\Batches\BatchesData;
 use NckRtl\HorizonNewDawn\Batches\BatchJobsData;
@@ -26,7 +25,6 @@ function retainedQueueBatchesData(BatchRepository $repository): QueueBatchesData
     $batches = new BatchesData(
         $repository,
         new BatchJobsData($jobs, new JobsData($jobs)),
-        app(ConnectionResolverInterface::class),
     );
 
     return new QueueBatchesData($repository, $batches, app(CacheFactory::class));

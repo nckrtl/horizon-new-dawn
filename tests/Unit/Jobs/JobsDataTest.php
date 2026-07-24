@@ -12,6 +12,7 @@ use NckRtl\HorizonNewDawn\Jobs\JobsData;
 
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturns;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsFor;
+use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsUsing;
 use function NckRtl\HorizonNewDawn\Tests\Support\horizonJob;
 use function NckRtl\HorizonNewDawn\Tests\Support\mockDashboardContract;
 
@@ -113,7 +114,7 @@ describe('JobsData', function (): void {
         dashboardReturns($repository, $countMethod, 2);
 
         $connection = mockDashboardContract(Connection::class);
-        dashboardReturnsFor($connection, 'zrevrange', [$key, 0, 49], ['oldest', 'newest']);
+        dashboardReturnsFor($connection, 'zrevrange', [$key, 0, 50], ['oldest', 'newest']);
         $redis = mockDashboardContract(RedisFactory::class);
         dashboardReturnsFor($redis, 'connection', ['horizon'], $connection);
 
@@ -124,6 +125,91 @@ describe('JobsData', function (): void {
         'completed' => [JobListType::Completed, 'completed_jobs', 'countCompleted'],
         'silenced' => [JobListType::Silenced, 'silenced_jobs', 'countSilenced'],
     ]);
+
+    it('continues from the raw Redis boundary when a retained job hash has expired', function (): void {
+        $ids = array_map(
+            static fn (int $index): string => "completed-{$index}",
+            range(0, 50),
+        );
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturnsUsing(
+            $repository,
+            'getJobs',
+            static function (array $requestedIds, int $startingAt = 0): Collection {
+                $jobs = [];
+
+                foreach ($requestedIds as $offset => $id) {
+                    if ($id === 'completed-20') {
+                        continue;
+                    }
+
+                    $jobs[] = horizonJob($startingAt + $offset, $id);
+                }
+
+                return new Collection($jobs);
+            },
+        );
+        dashboardReturns($repository, 'countCompleted', count($ids));
+
+        $connection = mockDashboardContract(Connection::class);
+        dashboardReturnsUsing(
+            $connection,
+            'zrevrange',
+            static fn (string $key, int $start, int $stop): array => array_slice(
+                $ids,
+                $start,
+                $stop - $start + 1,
+            ),
+        );
+        $redis = mockDashboardContract(RedisFactory::class);
+        dashboardReturnsFor($redis, 'connection', ['horizon'], $connection);
+
+        $page = (new JobsData($repository, $redis))->page(JobListType::Completed, -1);
+
+        expect($page->items)->toHaveCount(49)
+            ->and($page->next)->toBe(49);
+    });
+
+    it('does not expose a redundant next page at the raw Redis boundary', function (): void {
+        $ids = array_map(
+            static fn (int $index): string => "completed-{$index}",
+            range(0, 49),
+        );
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturnsUsing(
+            $repository,
+            'getJobs',
+            static fn (array $requestedIds, int $startingAt = 0): Collection => new Collection(
+                array_map(
+                    static fn (string $id, int $offset): object => horizonJob(
+                        $startingAt + $offset,
+                        $id,
+                    ),
+                    $requestedIds,
+                    array_keys($requestedIds),
+                ),
+            ),
+        );
+        dashboardReturns($repository, 'countCompleted', count($ids));
+
+        $connection = mockDashboardContract(Connection::class);
+        dashboardReturnsUsing(
+            $connection,
+            'zrevrange',
+            static fn (string $key, int $start, int $stop): array => array_slice(
+                $ids,
+                $start,
+                $stop - $start + 1,
+            ),
+        );
+        $redis = mockDashboardContract(RedisFactory::class);
+        dashboardReturnsFor($redis, 'connection', ['horizon'], $connection);
+
+        $page = (new JobsData($repository, $redis))->page(JobListType::Completed, -1);
+
+        expect($page->items)->toHaveCount(50)
+            ->and($page->next)->toBeNull();
+    });
 
     it('returns a safe detail payload without raw serialized commands', function (): void {
         $repository = mockDashboardContract(JobRepository::class);

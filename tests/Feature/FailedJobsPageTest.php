@@ -51,8 +51,8 @@ describe('failed job pages', function (): void {
         $tags = mockDashboardContract(TagRepository::class);
         dashboardReturns($repository, 'getFailed', new Collection([$job]));
         dashboardReturns($repository, 'countFailed', 1);
-        dashboardReturnsFor($repository, 'getJobs', [['failed-1']], new Collection([$job]));
-        dashboardReturnsFor($tags, 'paginate', ['failed:tenant:42', 0, 50], [0 => 'failed-1']);
+        dashboardReturnsFor($repository, 'findFailed', ['failed-1'], $job);
+        dashboardReturnsFor($tags, 'paginate', ['failed:tenant:42', 0, 51], [0 => 'failed-1']);
         dashboardReturnsFor($tags, 'count', ['failed:tenant:42'], 1);
         dashboardReturnsFor($repository, 'getJobs', [['failed-1'], 0], new Collection([$job]));
         app()->instance(FailedJobsData::class, new FailedJobsData(
@@ -93,6 +93,22 @@ describe('failed job pages', function (): void {
                 ->where('job.payload.displayName', 'App\\Jobs\\ImportFeed')
                 ->where('job.retryEligible', true)
                 ->where('job.exception', 'sensitive trace'));
+    });
+
+    it('returns not found when a non-failed job id is used for failed detail', function (): void {
+        $job = horizonJob(0, 'completed-1');
+        $job->status = 'completed';
+
+        $repository = mockDashboardContract(JobRepository::class);
+        dashboardReturnsFor($repository, 'findFailed', ['completed-1'], $job);
+        app()->instance(FailedJobsData::class, new FailedJobsData(
+            $repository,
+            mockDashboardContract(TagRepository::class),
+            new JobsData($repository),
+            new FailedJobRetryEligibility,
+        ));
+
+        get('/horizon/failed/completed-1')->assertNotFound();
     });
 
     it('offers individual retry but not retry all after a prior retry failed', function (): void {

@@ -4,15 +4,11 @@ declare(strict_types=1);
 
 namespace NckRtl\HorizonNewDawn\Tests\Support;
 
-use Closure;
 use Illuminate\Bus\BatchRepository;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Queue\Factory as QueueFactory;
 use Illuminate\Contracts\Queue\Queue;
-use Illuminate\Database\ConnectionInterface;
-use Illuminate\Database\ConnectionResolverInterface;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Queue\QueueManager;
 use Illuminate\Queue\RedisQueue;
 use Illuminate\Redis\Connections\Connection;
@@ -113,6 +109,7 @@ function bindBrowserPageFixtures(): void
     dashboardReturns($jobs, 'getPending', new Collection);
     dashboardReturns($jobs, 'getCompleted', new Collection);
     dashboardReturns($jobs, 'getFailed', new Collection([$failed]));
+    dashboardReturnsUsing($jobs, 'findFailed', static fn (string $id): ?object => $jobsById[$id] ?? null);
     dashboardReturns($jobs, 'getSilenced', new Collection([$silenced]));
     dashboardReturns($jobs, 'countPending', 0);
     dashboardReturns($jobs, 'countCompleted', 0);
@@ -176,33 +173,9 @@ function bindBrowserPageFixtures(): void
     $batchRepository = mockDashboardContract(BatchRepository::class);
     dashboardReturns($batchRepository, 'find', $batch);
     dashboardReturns($batchRepository, 'get', []);
-    $batchDatabase = mockDashboardContract(ConnectionResolverInterface::class);
-    $batchConnection = mockDashboardContract(ConnectionInterface::class);
-    $batchQuery = mockDashboardContract(Builder::class);
-    dashboardReturns($batchDatabase, 'connection', $batchConnection);
-    dashboardReturns($batchConnection, 'table', $batchQuery);
-    dashboardReturnsUsing(
-        $batchQuery,
-        'where',
-        static function (mixed $column) use ($batchQuery): Builder {
-            if ($column instanceof Closure) {
-                $column($batchQuery);
-            }
-
-            return $batchQuery;
-        },
-    );
-    dashboardReturns($batchQuery, 'orWhere', $batchQuery);
-    dashboardReturns($batchQuery, 'orderByDesc', $batchQuery);
-    dashboardReturns($batchQuery, 'limit', $batchQuery);
-    dashboardReturns($batchQuery, 'pluck', collect());
-    dashboardReturns($batchQuery, 'whereNotNull', $batchQuery);
-    dashboardReturns($batchQuery, 'orWhereNotNull', $batchQuery);
-    dashboardReturns($batchQuery, 'count', 0);
     $batches = new BatchesData(
         $batchRepository,
         new BatchJobsData($jobs, $jobData),
-        $batchDatabase,
     );
     app()->instance(BatchesData::class, $batches);
 

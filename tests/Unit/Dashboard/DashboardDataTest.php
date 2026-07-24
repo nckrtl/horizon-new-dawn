@@ -8,9 +8,6 @@ use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Queue\Factory as QueueFactory;
 use Illuminate\Contracts\Queue\Queue;
 use Illuminate\Contracts\Redis\Factory as RedisFactory;
-use Illuminate\Database\ConnectionInterface;
-use Illuminate\Database\ConnectionResolverInterface;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Queue\QueueManager;
 use Illuminate\Redis\Connections\Connection;
 use Illuminate\Support\Collection;
@@ -20,6 +17,7 @@ use Laravel\Horizon\Contracts\MetricsRepository;
 use Laravel\Horizon\Contracts\SupervisorRepository;
 use Laravel\Horizon\MasterSupervisor;
 use Laravel\Horizon\WaitTimeCalculator;
+use NckRtl\HorizonNewDawn\Batches\BatchRepositoryOverview;
 use NckRtl\HorizonNewDawn\Dashboard\DashboardBatchSummary;
 use NckRtl\HorizonNewDawn\Dashboard\DashboardData;
 use NckRtl\HorizonNewDawn\Dashboard\DashboardPendingState;
@@ -45,6 +43,7 @@ function summaryDashboardData(array $masters): DashboardData
 {
     CarbonImmutable::setTestNow('2026-07-18 12:00:00 UTC');
     config()->set('queue.batching.database', null);
+    config()->set('horizon-new-dawn.poll_interval', 0);
 
     $jobs = mockDashboardContract(JobRepository::class);
     dashboardReturns($jobs, 'countFailed', 23);
@@ -72,26 +71,14 @@ function summaryDashboardData(array $masters): DashboardData
     $queues = mockDashboardContract(QueueFactory::class);
     dashboardReturnsFor($queues, 'connection', ['redis'], $queue);
 
-    $countBuilder = mockDashboardContract(Builder::class);
-    dashboardReturnsFor($countBuilder, 'whereNull', ['cancelled_at'], $countBuilder);
-    dashboardReturnsFor($countBuilder, 'whereColumn', ['pending_jobs', '>', 'failed_jobs'], $countBuilder);
-    dashboardReturnsFor($countBuilder, 'count', [], 4);
-    $previewBuilder = mockDashboardContract(Builder::class);
-    dashboardReturnsFor($previewBuilder, 'whereNull', ['cancelled_at'], $previewBuilder);
-    dashboardReturnsFor($previewBuilder, 'whereColumn', ['pending_jobs', '>', 'failed_jobs'], $previewBuilder);
-    dashboardReturnsFor($previewBuilder, 'orderByDesc', ['id'], $previewBuilder);
-    dashboardReturnsFor($previewBuilder, 'limit', [3], $previewBuilder);
-    dashboardReturnsFor($previewBuilder, 'pluck', ['id'], collect(['batch-3', 'batch-2', 'batch-1']));
-    $databaseConnection = mockDashboardContract(ConnectionInterface::class);
-    dashboardReturnsFor($databaseConnection, 'table', ['job_batches'], $countBuilder);
-    dashboardReturnsFor($databaseConnection, 'table', ['job_batches'], $previewBuilder);
-    $database = mockDashboardContract(ConnectionResolverInterface::class);
-    dashboardReturnsFor($database, 'connection', [null], $databaseConnection);
-    dashboardReturnsFor($database, 'connection', [null], $databaseConnection);
     $batches = mockDashboardContract(BatchRepository::class);
-    dashboardReturnsFor($batches, 'find', ['batch-3'], horizonBatch('batch-3', name: 'Archive audit logs', totalJobs: 100, pendingJobs: 52));
-    dashboardReturnsFor($batches, 'find', ['batch-2'], horizonBatch('batch-2', name: 'Import order CSV', totalJobs: 100, pendingJobs: 87));
-    dashboardReturnsFor($batches, 'find', ['batch-1'], horizonBatch('batch-1', name: 'Reindex product catalog', totalJobs: 100, pendingJobs: 28));
+    dashboardReturnsFor($batches, 'get', [100, null], [
+        horizonBatch('batch-3', name: 'Archive audit logs', totalJobs: 100, pendingJobs: 52),
+        horizonBatch('batch-2', name: 'Import order CSV', totalJobs: 100, pendingJobs: 87),
+        horizonBatch('batch-1', name: 'Reindex product catalog', totalJobs: 100, pendingJobs: 28),
+        horizonBatch('batch-0', totalJobs: 100, pendingJobs: 1),
+    ]);
+    dashboardReturnsFor($batches, 'get', [100, 'batch-0'], []);
 
     $connection = mockDashboardContract(Connection::class);
     $failedRetentionMinutes = max(0, (int) config('horizon.trim.failed', 10080));
@@ -148,7 +135,10 @@ function summaryDashboardData(array $masters): DashboardData
         $waitTimes,
         unusedQueuePauseStatus(),
         new DashboardPendingState($queues),
-        new DashboardBatchSummary($batches, $database),
+        new DashboardBatchSummary(new BatchRepositoryOverview(
+            $batches,
+            app(CacheFactory::class),
+        )),
         $redis,
         app(QueueWaitThreshold::class),
     );
@@ -843,10 +833,10 @@ function unusedDashboardPendingState(): DashboardPendingState
 
 function unusedDashboardBatchSummary(): DashboardBatchSummary
 {
-    return new DashboardBatchSummary(
+    return new DashboardBatchSummary(new BatchRepositoryOverview(
         mockDashboardContract(BatchRepository::class),
-        mockDashboardContract(ConnectionResolverInterface::class),
-    );
+        app(CacheFactory::class),
+    ));
 }
 
 function unusedQueuePauseStatus(): QueuePauseStatus

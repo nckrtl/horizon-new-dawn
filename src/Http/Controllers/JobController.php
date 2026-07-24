@@ -18,7 +18,11 @@ final class JobController
     public function index(Request $request, JobsData $jobs, QueuesData $queues, string $type): Response
     {
         $jobType = JobListType::from($type);
-        $page = $jobs->page($jobType, $request->integer('starting_at', -1));
+        $cursor = $request->query('starting_at', -1);
+        $startingAt = $jobType === JobListType::Pending && (is_int($cursor) || is_string($cursor))
+            ? $cursor
+            : $request->integer('starting_at', -1);
+        $page = $jobs->page($jobType, $startingAt);
 
         return Inertia::render('Jobs/Index', [
             'meta' => new PageMetaData($jobType->title(), $jobType->navigation()),

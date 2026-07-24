@@ -8,9 +8,21 @@ const darkModeQuery = "(prefers-color-scheme: dark)";
 const schemes: ColorScheme[] = ["system", "dark", "light"];
 
 function storedScheme(): ColorScheme {
-  const value = window.localStorage.getItem(storageKey);
+  try {
+    const value = window.localStorage.getItem(storageKey);
 
-  return value === "dark" || value === "light" || value === "system" ? value : "system";
+    return value === "dark" || value === "light" || value === "system" ? value : "system";
+  } catch {
+    return "system";
+  }
+}
+
+function storeScheme(scheme: ColorScheme) {
+  try {
+    window.localStorage.setItem(storageKey, scheme);
+  } catch {
+    // The current session can still use the selected scheme when storage is unavailable.
+  }
 }
 
 function systemScheme(): ResolvedColorScheme {
@@ -39,7 +51,7 @@ export function useColorScheme() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(storageKey, scheme);
+    storeScheme(scheme);
     applyScheme(resolvedScheme);
   }, [resolvedScheme, scheme]);
 

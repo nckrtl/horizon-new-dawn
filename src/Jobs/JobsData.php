@@ -27,10 +27,11 @@ final readonly class JobsData
         private ?PendingJobPaginator $pendingJobs = null,
     ) {}
 
-    public function page(JobListType $type, int $afterIndex): JobPageData
+    public function page(JobListType $type, int|string|null $afterIndex): JobPageData
     {
         try {
-            $jobs = $this->oldest($type, $afterIndex);
+            $page = $this->oldest($type, $afterIndex);
+            $jobs = $page['jobs'];
             $total = match ($type) {
                 JobListType::Pending => $this->jobs->countPending(),
                 JobListType::Completed => $this->jobs->countCompleted(),
@@ -55,8 +56,8 @@ final readonly class JobsData
                 available: true,
                 items: $items,
                 total: $total,
-                current: $afterIndex,
-                next: $jobs->count() === self::PAGE_SIZE ? $this->lastIndex($jobs) : null,
+                current: $page['current'],
+                next: $page['next'],
                 message: null,
             );
         } catch (Throwable $exception) {
@@ -217,29 +218,43 @@ final readonly class JobsData
         return is_object($last) && is_numeric($last->index ?? null) ? (int) $last->index : null;
     }
 
-    /** @return Collection<int, mixed> */
-    private function oldest(JobListType $type, int $afterIndex): Collection
+    /**
+     * @return array{
+     *     jobs: Collection<int, mixed>,
+     *     current: int|string|null,
+     *     next: int|string|null
+     * }
+     */
+    private function oldest(JobListType $type, int|string|null $afterIndex): array
     {
         if ($type === JobListType::Pending && $this->pendingJobs !== null) {
-            $start = $afterIndex + 1;
+            $page = $this->pendingJobs->page($afterIndex, self::PAGE_SIZE);
 
-            return $this->jobs->getJobs(
-                $this->pendingJobs->ids($start, self::PAGE_SIZE),
-                $start,
-            );
+            return [
+                'jobs' => $this->jobs->getJobs($page->ids),
+                'current' => $page->current,
+                'next' => $page->next,
+            ];
         }
 
-        if ($this->redis === null) {
-            $cursor = (string) $afterIndex;
+        $numericAfterIndex = $this->numericCursor($afterIndex);
 
-            return match ($type) {
+        if ($this->redis === null) {
+            $cursor = (string) $numericAfterIndex;
+            $jobs = match ($type) {
                 JobListType::Pending => $this->jobs->getPending($cursor),
                 JobListType::Completed => $this->jobs->getCompleted($cursor),
                 JobListType::Silenced => $this->jobs->getSilenced($cursor),
             };
+
+            return [
+                'jobs' => $jobs,
+                'current' => $numericAfterIndex,
+                'next' => $jobs->count() === self::PAGE_SIZE ? $this->lastIndex($jobs) : null,
+            ];
         }
 
-        $start = $afterIndex + 1;
+        $start = $numericAfterIndex + 1;
         $key = match ($type) {
             JobListType::Pending => 'pending_jobs',
             JobListType::Completed => 'completed_jobs',
@@ -248,17 +263,33 @@ final readonly class JobsData
         $ids = $this->redis->connection('horizon')->zrevrange(
             $key,
             $start,
-            $start + self::PAGE_SIZE - 1,
+            $start + self::PAGE_SIZE,
         );
 
         if (! is_array($ids)) {
-            return new Collection;
+            return [
+                'jobs' => new Collection,
+                'current' => $numericAfterIndex,
+                'next' => null,
+            ];
         }
 
-        return $this->jobs->getJobs(
-            array_values(array_filter($ids, is_string(...))),
-            $start,
-        );
+        $hasMore = count($ids) > self::PAGE_SIZE;
+        $ids = array_slice($ids, 0, self::PAGE_SIZE);
+
+        return [
+            'jobs' => $this->jobs->getJobs(
+                array_values(array_filter($ids, is_string(...))),
+                $start,
+            ),
+            'current' => $numericAfterIndex,
+            'next' => $hasMore ? $start + self::PAGE_SIZE - 1 : null,
+        ];
+    }
+
+    private function numericCursor(int|string|null $cursor): int
+    {
+        return is_numeric($cursor) ? (int) $cursor : -1;
     }
 
     /** @return array<string, mixed> */

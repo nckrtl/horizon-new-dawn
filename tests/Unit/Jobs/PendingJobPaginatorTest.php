@@ -35,7 +35,7 @@ it('orders the complete pending set by effective availability before hydrating a
     expect(array_column($page->items, 'id'))->toBe($expected)
         ->and($hydration->ids)->toBe($expected)
         ->and($hydration->ids)->toHaveCount(50)
-        ->and($page->next)->toBe(49);
+        ->and($page->next)->toBeString();
 });
 
 it('continues the same effective ordering on the next pending page', function (): void {
@@ -67,6 +67,97 @@ it('continues the same effective ordering on the next pending page', function ()
     expect(array_column($page->items, 'id'))->toBe($expected)
         ->and($hydration->ids)->toBe($expected)
         ->and($page->next)->toBeNull();
+});
+
+it('continues after the ordering tuple when earlier pending jobs disappear', function (): void {
+    $base = 1_784_281_000.0;
+    $jobs = [];
+    $pendingScores = [];
+
+    foreach (range(0, 54) as $index) {
+        $id = "job-{$index}";
+        $pushedAt = $base + $index;
+        $jobs[$id] = pendingOrderingJob($index, $id, $pushedAt);
+        $pendingScores[$id] = -$pushedAt;
+    }
+
+    bindPendingJobOrdering($jobs, $pendingScores, []);
+
+    $firstPage = app(JobsData::class)->page(JobListType::Pending, -1);
+    $cursor = $firstPage->next;
+
+    expect($cursor)->toBeString();
+
+    if (! is_string($cursor)) {
+        throw new LogicException('Expected an opaque pending-job cursor.');
+    }
+
+    foreach (range(0, 9) as $index) {
+        unset($jobs["job-{$index}"], $pendingScores["job-{$index}"]);
+    }
+
+    bindPendingJobOrdering($jobs, $pendingScores, []);
+
+    $secondPage = app(JobsData::class)->page(JobListType::Pending, $cursor);
+
+    expect(array_column($secondPage->items, 'id'))->toBe([
+        'job-50',
+        'job-51',
+        'job-52',
+        'job-53',
+        'job-54',
+    ])->and($secondPage->next)->toBeNull();
+});
+
+it('normalizes a malformed pending cursor before returning page metadata', function (): void {
+    $base = 1_784_281_000.0;
+    $job = pendingOrderingJob(0, 'job-1', $base);
+
+    bindPendingJobOrdering(
+        ['job-1' => $job],
+        ['job-1' => -$base],
+        [],
+    );
+
+    $page = app(JobsData::class)->page(JobListType::Pending, 'not-a-valid-cursor');
+
+    expect(array_column($page->items, 'id'))->toBe(['job-1'])
+        ->and($page->current)->toBe(-1)
+        ->and($page->next)->toBeNull();
+});
+
+it('includes configured queues when another queue already has an active supervisor', function (): void {
+    config()->set('horizon.defaults', []);
+    config()->set('horizon.environments', [
+        'local' => [
+            'reports' => [
+                'connection' => 'redis',
+                'queue' => ['reports'],
+            ],
+        ],
+    ]);
+
+    $base = 1_784_281_000.0;
+    $reports = pendingOrderingJob(0, 'reports-job', $base, $base + 1_000);
+    $default = pendingOrderingJob(1, 'default-job', $base + 1);
+    $reportsPayload = delayedOrderingPayload('reports-job', $base, 1_000);
+
+    bindPendingJobOrdering(
+        [
+            'reports-job' => $reports,
+            'default-job' => $default,
+        ],
+        [
+            'reports-job' => -$base,
+            'default-job' => -($base + 1),
+        ],
+        ['queues:reports:delayed' => [$reportsPayload => $base + 1_000]],
+        processes: ['redis:default' => 1],
+    );
+
+    $page = app(JobsData::class)->page(JobListType::Pending, -1);
+
+    expect(array_column($page->items, 'id'))->toBe(['default-job', 'reports-job']);
 });
 
 it('keeps a migrated scheduled job ordered by release time from its ready payload', function (): void {

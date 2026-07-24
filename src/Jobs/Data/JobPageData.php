@@ -13,8 +13,8 @@ final class JobPageData extends Data
         public readonly bool $available,
         public readonly array $items,
         public readonly int $total,
-        public readonly int $current,
-        public readonly ?int $next,
+        public readonly int|string|null $current,
+        public readonly int|string|null $next,
         public readonly ?string $message,
     ) {}
 }

@@ -8,7 +8,7 @@ Horizon New Dawn is an additive Laravel package that replaces Horizon's browser 
 - Reuse Horizon's contracts and repositories so data semantics stay aligned with the installed Horizon version.
 - Preserve Horizon's route path, authentication middleware, authorization callback, and API controllers.
 - Keep the package isolated from the host application's Inertia root view and frontend build.
-- Use package-owned controllers and routes for the complete browser interface while leaving Horizon's API intact.
+- Use package-owned controllers and routes for the complete browser interface while retaining Horizon's API contract.
 
 ## Request lifecycle
 
@@ -27,7 +27,7 @@ POST and DELETE mutation routes
 
 The route group uses Horizon's middleware group and `Authenticate` middleware, followed by the package's Inertia middleware. It is registered before Horizon's browser catch-all, so concrete New Dawn routes own supported screens without shadowing Horizon API routes.
 
-Horizon still registers its catch-all home route. The provider binds Horizon's home controller to a package controller that returns `404`, preventing unsupported paths from falling through to the bundled Vue interface. Horizon API controllers and routes are not replaced and do not receive New Dawn's Inertia middleware.
+Horizon still registers its catch-all home route. The provider binds Horizon's home controller to a package controller that returns `404`, preventing unsupported paths from falling through to the bundled Vue interface. Horizon API routes do not receive New Dawn's Inertia middleware. The monitoring API controller is intentionally wrapped so its mutation endpoints share New Dawn's reserved-key and currently-monitored tag guard while retaining Horizon's existing read responses and route contract.
 
 `HandleInertiaRequests` selects the package root view and shares the Horizon base URL, runtime status, host maintenance state, polling interval, and flash messages with every New Dawn page.
 
@@ -43,7 +43,7 @@ Horizon repositories and calculators
     -> React pages
 ```
 
-Large job collections use Inertia scroll props and Horizon cursors. Batch search uses the configured database connection and batch table, escapes SQL wildcard characters, and paginates with a descending batch identifier cursor.
+Large job collections use Inertia scroll props and Horizon cursors. Batch search and pagination use Laravel's configured `BatchRepository`, with literal case-insensitive matching and a descending batch identifier cursor. Dashboard and navigation batch totals share a repository overview cached for one interface polling interval, avoiding duplicate full scans while retaining DynamoDB compatibility.
 
 Repository failures are caught at data boundaries and converted into explicit unavailable states. List previews omit sensitive payload and exception data. Detail pages expose normalized fields deliberately, never raw repository objects or Redis internals.
 
@@ -71,7 +71,7 @@ The installer copies configuration and compiled assets into the host application
 
 ## Extension boundaries
 
-Use Horizon contracts when a feature already exists in Horizon. Add a focused package service or action when New Dawn needs normalization, database-backed batch queries, or a mutation Horizon does not expose through a suitable contract.
+Use Horizon contracts when a feature already exists in Horizon. Add a focused package service or action when New Dawn needs normalization, repository-backed aggregation, or a mutation Horizon does not expose through a suitable contract.
 
 New routes must:
 

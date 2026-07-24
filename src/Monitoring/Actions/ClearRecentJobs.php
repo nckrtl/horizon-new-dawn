@@ -6,6 +6,7 @@ namespace NckRtl\HorizonNewDawn\Monitoring\Actions;
 
 use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\TagRepository;
+use NckRtl\HorizonNewDawn\Monitoring\MonitoringTagGuard;
 
 final readonly class ClearRecentJobs
 {
@@ -14,10 +15,13 @@ final readonly class ClearRecentJobs
     public function __construct(
         private TagRepository $tags,
         private JobRepository $jobs,
+        private MonitoringTagGuard $guard,
     ) {}
 
     public function handle(string $tag): int
     {
+        $this->guard->ensureMonitored($this->tags, $tag);
+
         $startingAt = 0;
         $cleared = 0;
 

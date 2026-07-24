@@ -160,38 +160,50 @@ final readonly class MonitoringData
 
     private function lastActivityAt(string $tag): ?float
     {
-        $recentIds = array_values(array_filter(
-            $this->tags->paginate($tag, 0, 1),
-            is_string(...),
-        ));
-        $failedIds = array_values(array_filter(
-            $this->tags->paginate("failed:{$tag}", 0, 1),
-            is_string(...),
-        ));
-        $ids = array_values(array_unique([...$recentIds, ...$failedIds]));
+        $recent = $this->latestActivityForTag($tag);
+        $failed = $this->latestActivityForTag("failed:{$tag}");
 
-        if ($ids === []) {
-            return null;
-        }
+        return match (true) {
+            $recent === null => $failed,
+            $failed === null => $recent,
+            default => max($recent, $failed),
+        };
+    }
 
-        $latest = null;
+    private function latestActivityForTag(string $tag): ?float
+    {
+        $startingAt = 0;
 
-        foreach ($this->jobs->getJobs($ids) as $job) {
-            if (! is_object($job)) {
-                continue;
+        while (true) {
+            $references = $this->tags->paginate($tag, $startingAt, self::PAGE_SIZE);
+
+            if ($references === []) {
+                return null;
             }
 
-            $row = $this->jobData->row($job);
-            $occurredAt = $row?->occurredAt;
+            $ids = array_values(array_filter($references, is_string(...)));
+            $latest = null;
 
-            if ($occurredAt === null) {
-                continue;
+            if ($ids !== []) {
+                foreach ($this->jobs->getJobs($ids) as $job) {
+                    if (! is_object($job)) {
+                        continue;
+                    }
+
+                    $occurredAt = $this->jobData->row($job)?->occurredAt;
+
+                    if ($occurredAt !== null) {
+                        $latest = $latest === null ? $occurredAt : max($latest, $occurredAt);
+                    }
+                }
             }
 
-            $latest = $latest === null ? $occurredAt : max($latest, $occurredAt);
-        }
+            if ($latest !== null || count($references) < self::PAGE_SIZE) {
+                return $latest;
+            }
 
-        return $latest;
+            $startingAt += self::PAGE_SIZE;
+        }
     }
 
     /** @return list<string> */

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MonitoredTagsTable } from "@/components/monitoring/monitored-tags-table";
 import { MonitoringJobTable } from "@/components/monitoring/monitoring-job-table";
@@ -40,6 +40,10 @@ const job: JobRow = {
 };
 
 describe("monitoring tables", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("sorts tags and uses encoded dedicated routes", () => {
     render(
       <TooltipProvider>
@@ -93,6 +97,9 @@ describe("monitoring tables", () => {
   });
 
   it("shows delayed recent jobs with the correct column set", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T09:36:40Z"));
+
     render(<MonitoringJobTable jobs={[job]} status="jobs" horizonBaseUrl="/horizon" />);
 
     expect(screen.getAllByRole("columnheader")).toHaveLength(3);

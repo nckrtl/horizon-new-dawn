@@ -11,6 +11,7 @@ use NckRtl\HorizonNewDawn\Monitoring\MonitoringStatus;
 
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturns;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsFor;
+use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsUsing;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardThrows;
 use function NckRtl\HorizonNewDawn\Tests\Support\horizonJob;
 use function NckRtl\HorizonNewDawn\Tests\Support\mockDashboardContract;
@@ -35,10 +36,10 @@ describe('MonitoringData', function (): void {
         dashboardReturnsFor($tags, 'count', ['failed:zeta'], 2);
         dashboardReturnsFor($tags, 'count', ['alpha'], 3);
         dashboardReturnsFor($tags, 'count', ['failed:alpha'], 1);
-        dashboardReturnsFor($tags, 'paginate', ['zeta', 0, 1], []);
-        dashboardReturnsFor($tags, 'paginate', ['failed:zeta', 0, 1], [0 => 'zeta-failed']);
-        dashboardReturnsFor($tags, 'paginate', ['alpha', 0, 1], [0 => 'alpha-recent']);
-        dashboardReturnsFor($tags, 'paginate', ['failed:alpha', 0, 1], []);
+        dashboardReturnsFor($tags, 'paginate', ['zeta', 0, 50], []);
+        dashboardReturnsFor($tags, 'paginate', ['failed:zeta', 0, 50], [0 => 'zeta-failed']);
+        dashboardReturnsFor($tags, 'paginate', ['alpha', 0, 50], [0 => 'alpha-recent']);
+        dashboardReturnsFor($tags, 'paginate', ['failed:alpha', 0, 50], []);
 
         $jobs = mockDashboardContract(JobRepository::class);
         dashboardReturnsFor($jobs, 'getJobs', [['zeta-failed']], new Collection([$zetaFailed]));
@@ -67,6 +68,51 @@ describe('MonitoringData', function (): void {
             ->and($page->tags)->toBe([])
             ->and($page->message)->toBe('Monitored tags are currently unavailable.');
     });
+
+    it('finds activity behind full pages of stale tag references', function (string $repositoryTag): void {
+        $staleIds = array_map(
+            static fn (int $index): string => "stale-{$index}",
+            range(0, 49),
+        );
+        $live = horizonJob(50, 'live-older-reference');
+        $live->completed_at = '1784281300.00';
+        $live->failed_at = null;
+
+        $tags = mockDashboardContract(TagRepository::class);
+        dashboardReturns($tags, 'monitoring', ['checkout']);
+        dashboardReturnsUsing(
+            $tags,
+            'count',
+            static fn (string $tag): int => $tag === $repositoryTag ? 51 : 0,
+        );
+        dashboardReturnsUsing(
+            $tags,
+            'paginate',
+            static function (string $tag, int $startingAt, int $limit) use ($repositoryTag, $staleIds): array {
+                $ids = $tag === $repositoryTag
+                    ? [...$staleIds, 'live-older-reference']
+                    : [];
+
+                return array_slice($ids, $startingAt, $limit, preserve_keys: true);
+            },
+        );
+
+        $jobs = mockDashboardContract(JobRepository::class);
+        dashboardReturnsUsing(
+            $jobs,
+            'getJobs',
+            static fn (array $ids): Collection => in_array('live-older-reference', $ids, true)
+                ? new Collection([$live])
+                : new Collection,
+        );
+
+        $page = (new MonitoringData($tags, $jobs, new JobsData($jobs)))->index();
+
+        expect($page->tags[0]->lastActivityAt)->toBe(1_784_281_300.0);
+    })->with([
+        'recent jobs' => 'checkout',
+        'failed jobs' => 'failed:checkout',
+    ]);
 
     it('builds a tag summary with retention configuration', function (): void {
         config()->set('horizon.silenced_tags', ['checkout']);

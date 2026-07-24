@@ -83,7 +83,7 @@ final readonly class SupervisorDetails
             timeout: $timeout,
             retryAfter: $retryAfter,
             maxTries: $this->intOption($options, 'maxTries'),
-            backoff: $this->intOption($options, 'backoff'),
+            backoff: $this->backoffOption($options),
             maxJobs: $this->intOption($options, 'maxJobs'),
             maxTime: $this->intOption($options, 'maxTime'),
             sleep: $this->intOption($options, 'sleep'),
@@ -196,6 +196,39 @@ final readonly class SupervisorDetails
         $value = $options[$key] ?? null;
 
         return is_numeric($value) ? (int) $value : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     * @return int|array<int, int>|null
+     */
+    private function backoffOption(array $options): int|array|null
+    {
+        $value = $options['backoff'] ?? null;
+
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
+
+        if (is_string($value)) {
+            $value = explode(',', $value);
+        }
+
+        if (! is_array($value) || $value === []) {
+            return null;
+        }
+
+        $backoff = [];
+
+        foreach ($value as $seconds) {
+            if (! is_numeric($seconds)) {
+                return null;
+            }
+
+            $backoff[] = (int) $seconds;
+        }
+
+        return $backoff;
     }
 
     /** @param array<string, mixed> $options */

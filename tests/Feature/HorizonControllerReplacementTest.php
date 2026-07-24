@@ -3,28 +3,36 @@
 declare(strict_types=1);
 
 use Illuminate\Bus\BatchRepository;
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Queue\Factory as QueueFactory;
 use Illuminate\Contracts\Queue\Queue;
 use Illuminate\Contracts\Redis\Factory as RedisFactory;
-use Illuminate\Database\ConnectionInterface;
-use Illuminate\Database\ConnectionResolverInterface;
-use Illuminate\Database\Query\Builder;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Queue\QueueManager;
 use Illuminate\Redis\Connections\Connection;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia;
 use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 use Laravel\Horizon\Contracts\MetricsRepository;
 use Laravel\Horizon\Contracts\SupervisorRepository;
+use Laravel\Horizon\Contracts\TagRepository;
 use Laravel\Horizon\Contracts\WorkloadRepository;
+use Laravel\Horizon\Horizon;
 use Laravel\Horizon\Http\Controllers\HomeController as HorizonHomeController;
+use Laravel\Horizon\Http\Controllers\MonitoringController as HorizonMonitoringController;
 use Laravel\Horizon\Http\Middleware\Authenticate;
+use Laravel\Horizon\Jobs\MonitorTag as HorizonMonitorTag;
+use Laravel\Horizon\Jobs\StopMonitoringTag as HorizonStopMonitoringTag;
 use Laravel\Horizon\WaitTimeCalculator;
+use NckRtl\HorizonNewDawn\Batches\BatchRepositoryOverview;
 use NckRtl\HorizonNewDawn\Dashboard\DashboardBatchSummary;
 use NckRtl\HorizonNewDawn\Dashboard\DashboardData;
 use NckRtl\HorizonNewDawn\Dashboard\DashboardPendingState;
 use NckRtl\HorizonNewDawn\Http\Controllers\HomeController;
+use NckRtl\HorizonNewDawn\Http\Controllers\MonitoringApiController;
 use NckRtl\HorizonNewDawn\Http\Middleware\HandleInertiaRequests;
 use NckRtl\HorizonNewDawn\Queues\QueuePauseMetadata;
 use NckRtl\HorizonNewDawn\Queues\QueuePauseStatus;
@@ -35,7 +43,10 @@ use NckRtl\HorizonNewDawn\Support\HorizonRuntime;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturns;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsFor;
 use function NckRtl\HorizonNewDawn\Tests\Support\mockDashboardContract;
+use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\get;
+use function Pest\Laravel\postJson;
+use function Pest\Laravel\withoutMiddleware;
 
 describe('Horizon controller replacement', function (): void {
     it('keeps the Horizon catch-all as an authenticated fallback', function (): void {
@@ -46,6 +57,44 @@ describe('Horizon controller replacement', function (): void {
         expect($route)->not->toBeNull()
             ->and($route?->gatherMiddleware())->not->toContain(HandleInertiaRequests::class)
             ->and($route?->gatherMiddleware())->toContain(Authenticate::class);
+    });
+
+    it('guards mutations on the preserved Horizon monitoring API', function (): void {
+        withoutMiddleware([PreventRequestForgery::class, ValidateCsrfToken::class]);
+        Horizon::auth(static fn (): bool => true);
+        Bus::fake();
+
+        $jobs = mockDashboardContract(JobRepository::class);
+        $tags = mockDashboardContract(TagRepository::class);
+        dashboardReturns($tags, 'monitoring', ['checkout']);
+        app()->instance(JobRepository::class, $jobs);
+        app()->instance(TagRepository::class, $tags);
+
+        expect(app(HorizonMonitoringController::class))
+            ->toBeInstanceOf(MonitoringApiController::class);
+
+        postJson('/horizon/api/monitoring', ['tag' => 'pending_jobs'])
+            ->assertUnprocessable();
+        deleteJson('/horizon/api/monitoring/pending_jobs')
+            ->assertUnprocessable();
+        deleteJson('/horizon/api/monitoring/not-monitored')
+            ->assertUnprocessable();
+
+        postJson('/horizon/api/monitoring', ['tag' => 'checkout'])
+            ->assertOk();
+        deleteJson('/horizon/api/monitoring/checkout')
+            ->assertOk();
+
+        Bus::assertDispatched(
+            HorizonMonitorTag::class,
+            fn (HorizonMonitorTag $job): bool => $job->tag === 'checkout',
+        );
+        Bus::assertDispatched(
+            HorizonStopMonitoringTag::class,
+            fn (HorizonStopMonitoringTag $job): bool => $job->tag === 'checkout',
+        );
+        Bus::assertDispatchedTimes(HorizonMonitorTag::class, 1);
+        Bus::assertDispatchedTimes(HorizonStopMonitoringTag::class, 1);
     });
 
     it('returns the New Dawn dashboard from the concrete package route', function (): void {
@@ -86,23 +135,8 @@ describe('Horizon controller replacement', function (): void {
         $queues = mockDashboardContract(QueueFactory::class);
         dashboardReturns($queues, 'connection', $queue);
 
-        config()->set('queue.batching.database', null);
-        $countBuilder = mockDashboardContract(Builder::class);
-        dashboardReturnsFor($countBuilder, 'whereNull', ['cancelled_at'], $countBuilder);
-        dashboardReturnsFor($countBuilder, 'whereColumn', ['pending_jobs', '>', 'failed_jobs'], $countBuilder);
-        dashboardReturnsFor($countBuilder, 'count', [], 0);
-        $previewBuilder = mockDashboardContract(Builder::class);
-        dashboardReturnsFor($previewBuilder, 'whereNull', ['cancelled_at'], $previewBuilder);
-        dashboardReturnsFor($previewBuilder, 'whereColumn', ['pending_jobs', '>', 'failed_jobs'], $previewBuilder);
-        dashboardReturnsFor($previewBuilder, 'orderByDesc', ['id'], $previewBuilder);
-        dashboardReturnsFor($previewBuilder, 'limit', [3], $previewBuilder);
-        dashboardReturnsFor($previewBuilder, 'pluck', ['id'], collect());
-        $databaseConnection = mockDashboardContract(ConnectionInterface::class);
-        dashboardReturnsFor($databaseConnection, 'table', ['job_batches'], $countBuilder);
-        dashboardReturnsFor($databaseConnection, 'table', ['job_batches'], $previewBuilder);
-        $database = mockDashboardContract(ConnectionResolverInterface::class);
-        dashboardReturns($database, 'connection', $databaseConnection);
         $batches = mockDashboardContract(BatchRepository::class);
+        dashboardReturnsFor($batches, 'get', [100, null], []);
 
         $connection = mockDashboardContract(Connection::class);
         dashboardReturns($connection, 'zcount', 0);
@@ -130,7 +164,10 @@ describe('Horizon controller replacement', function (): void {
             $waitTimes,
             new QueuePauseStatus($queueManager, new QueuePauseMetadata(app('cache'))),
             $pendingState,
-            new DashboardBatchSummary($batches, $database),
+            new DashboardBatchSummary(new BatchRepositoryOverview(
+                $batches,
+                app(CacheFactory::class),
+            )),
             $redis,
             app(QueueWaitThreshold::class),
         ));

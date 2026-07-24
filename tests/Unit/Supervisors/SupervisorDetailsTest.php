@@ -113,6 +113,30 @@ describe('SupervisorDetails', function (): void {
         ]);
     })->with([90, 120]);
 
+    it('normalizes a worker backoff schedule', function (string|array $backoff): void {
+        $supervisors = mockDashboardContract(SupervisorRepository::class);
+        dashboardReturnsFor($supervisors, 'find', ['machine:supervisor-1'], (object) [
+            'name' => 'machine:supervisor-1',
+            'status' => 'running',
+            'processes' => ['redis:default' => 1],
+            'options' => [
+                'connection' => 'redis',
+                'queue' => 'default',
+                'backoff' => $backoff,
+            ],
+        ]);
+
+        $result = (new SupervisorDetails(
+            $supervisors,
+            app(ConfigRepository::class),
+        ))->find('machine:supervisor-1');
+
+        expect($result->supervisor?->backoff)->toBe([1, 5, 10]);
+    })->with([
+        'serialized by Horizon' => '1,5,10',
+        'raw configuration' => [[1, 5, 10]],
+    ]);
+
     it('preserves unavailable options and falls back to process queue order', function (): void {
         config()->set('queue.connections.redis.retry_after', null);
 

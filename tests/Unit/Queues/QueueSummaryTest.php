@@ -5,7 +5,6 @@ declare(strict_types=1);
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\BatchRepository;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
-use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Queue\QueueManager;
 use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\MetricsRepository;
@@ -41,7 +40,6 @@ function queueSummaryCoordinator(
     $batches = new BatchesData(
         $batchRepository,
         new BatchJobsData($jobRepository, $jobs),
-        app(ConnectionResolverInterface::class),
     );
 
     return new QueueSummary(

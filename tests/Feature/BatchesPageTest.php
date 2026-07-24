@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Illuminate\Bus\BatchRepository;
-use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Collection;
@@ -53,6 +52,7 @@ describe('batch pages', function (): void {
         );
         $batches = mockDashboardContract(BatchRepository::class);
         dashboardReturnsFor($batches, 'get', [50, null], [$batch]);
+        dashboardReturnsFor($batches, 'get', [49, 'batch-1'], []);
         dashboardReturnsFor($batches, 'find', ['batch-1'], $batch);
         $jobs = mockDashboardContract(JobRepository::class);
         dashboardReturnsFor($jobs, 'getPending', [null], new Collection([
@@ -69,7 +69,6 @@ describe('batch pages', function (): void {
         app()->instance(BatchesData::class, new BatchesData(
             $batches,
             new BatchJobsData($jobs, new JobsData($jobs)),
-            app(ConnectionResolverInterface::class),
         ));
 
         get('/horizon/batches')
@@ -103,7 +102,6 @@ describe('batch pages', function (): void {
         app()->instance(BatchesData::class, new BatchesData(
             $batches,
             new BatchJobsData($jobs, new JobsData($jobs)),
-            app(ConnectionResolverInterface::class),
         ));
 
         get('/horizon/batches/missing')->assertNotFound();
@@ -116,11 +114,11 @@ describe('batch pages', function (): void {
         $batch->createdAt = Date::now()->subHours(2)->toImmutable();
         $batches = mockDashboardContract(BatchRepository::class);
         dashboardReturnsFor($batches, 'get', [50, null], [$batch]);
+        dashboardReturnsFor($batches, 'get', [50, 'batch-1'], []);
         $jobs = mockDashboardContract(JobRepository::class);
         app()->instance(BatchesData::class, new BatchesData(
             $batches,
             new BatchJobsData($jobs, new JobsData($jobs)),
-            app(ConnectionResolverInterface::class),
         ));
 
         get('/horizon/batches?queue=imports&connection=redis&created=day')

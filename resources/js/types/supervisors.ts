@@ -24,7 +24,7 @@ export type SupervisorDetails = {
   timeout: number | null;
   retryAfter: number | null;
   maxTries: number | null;
-  backoff: number | null;
+  backoff: number | number[] | null;
   maxJobs: number | null;
   maxTime: number | null;
   sleep: number | null;

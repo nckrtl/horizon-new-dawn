@@ -13,9 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { show as failedJobShow } from "@/generated/routes/horizon-new-dawn/failed-jobs";
 import { show as jobShow } from "@/generated/routes/horizon-new-dawn/jobs";
+import { useScheduledJobClock } from "@/hooks/use-scheduled-job-clock";
 import { useSortableRows, type SortColumn } from "@/hooks/use-sortable-rows";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { isInteractiveTarget } from "@/lib/interactive-target";
+import { pendingJobState } from "@/lib/pending-job-state";
 import type { JobRow } from "@/types/jobs";
 import type { MonitoringStatus } from "@/types/monitoring";
 
@@ -65,6 +67,7 @@ export function MonitoringJobTable({
   jobFilter?: string | null;
   queueFilter?: string | null;
 }) {
+  const now = useScheduledJobClock(jobs);
   const sorted = useSortableRows(jobs, columns, { persist: true });
   const failed = status === "failed";
 
@@ -152,7 +155,8 @@ export function MonitoringJobTable({
             />
           ) : null}
           {filteredRows.map((job) => {
-            const detailUrl = failed
+            const failedDetail = failed || job.status === "failed";
+            const detailUrl = failedDetail
               ? resolveHorizonRoute(failedJobShow(job.id), horizonBaseUrl).url
               : resolveHorizonRoute(
                   jobShow({
@@ -161,10 +165,7 @@ export function MonitoringJobTable({
                   }),
                   horizonBaseUrl,
                 ).url;
-            const delayed =
-              job.delay !== null &&
-              job.delay > 0 &&
-              (job.status === "reserved" || job.status === "pending");
+            const delayed = job.status === "pending" && pendingJobState(job, now) === "delayed";
 
             return (
               <TableRow

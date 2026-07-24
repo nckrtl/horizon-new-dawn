@@ -6,7 +6,6 @@ use Illuminate\Bus\BatchRepository;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Queue\Factory as QueueFactory;
 use Illuminate\Contracts\Queue\Queue;
-use Illuminate\Database\ConnectionResolverInterface;
 use Inertia\Testing\AssertableInertia;
 use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\MasterSupervisorRepository;
@@ -109,7 +108,6 @@ function bindFeatureQueueDetail(string $queueName): void
     $batches = new BatchesData(
         $batchRepository,
         new BatchJobsData($repository, $jobs),
-        app(ConnectionResolverInterface::class),
     );
     $queueJobs = new QueueJobsData(
         $repository,

@@ -2,11 +2,10 @@
 
 declare(strict_types=1);
 
+use Illuminate\Bus\BatchRepository;
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Queue\Factory as QueueFactory;
 use Illuminate\Contracts\Redis\Factory as RedisFactory;
-use Illuminate\Database\ConnectionInterface;
-use Illuminate\Database\ConnectionResolverInterface;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Redis\Connections\Connection;
 use Inertia\Testing\AssertableInertia;
 use Laravel\Horizon\Contracts\JobRepository;
@@ -14,6 +13,7 @@ use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 use Laravel\Horizon\Contracts\MetricsRepository;
 use Laravel\Horizon\Contracts\SupervisorRepository;
 use Laravel\Horizon\WaitTimeCalculator;
+use NckRtl\HorizonNewDawn\Batches\BatchRepositoryOverview;
 use NckRtl\HorizonNewDawn\Queues\QueuePauseStatus;
 use NckRtl\HorizonNewDawn\Queues\QueuesData;
 use NckRtl\HorizonNewDawn\Queues\QueueWaitThreshold;
@@ -21,11 +21,14 @@ use NckRtl\HorizonNewDawn\Support\NavigationCounts;
 
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturns;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsFor;
+use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsUsing;
+use function NckRtl\HorizonNewDawn\Tests\Support\horizonBatch;
 use function NckRtl\HorizonNewDawn\Tests\Support\mockDashboardContract;
 use function Pest\Laravel\get;
 
 it('delivers navigation counts in their own deferred group', function (): void {
     config()->set('queue.batching.database', null);
+    config()->set('horizon-new-dawn.poll_interval', 0);
     $redisConnection = mockDashboardContract(Connection::class);
     dashboardReturnsFor($redisConnection, 'scard', ['monitoring'], 2);
     dashboardReturnsFor($redisConnection, 'scard', ['measured_jobs'], 4);
@@ -55,14 +58,29 @@ it('delivers navigation counts in their own deferred group', function (): void {
         app(QueuePauseStatus::class),
         app(QueueWaitThreshold::class),
     );
-    $builder = mockDashboardContract(Builder::class);
-    dashboardReturns($builder, 'count', 4);
-    $connection = mockDashboardContract(ConnectionInterface::class);
-    dashboardReturnsFor($connection, 'table', ['job_batches'], $builder);
-    $database = mockDashboardContract(ConnectionResolverInterface::class);
-    dashboardReturnsFor($database, 'connection', [null], $connection);
+    $batches = mockDashboardContract(BatchRepository::class);
+    dashboardReturnsUsing(
+        $batches,
+        'get',
+        static fn (int $limit, ?string $before): array => match ($before) {
+            null => [
+                horizonBatch('batch-4'),
+                horizonBatch('batch-3'),
+                horizonBatch('batch-2'),
+                horizonBatch('batch-1'),
+            ],
+            'batch-1' => [],
+            default => throw new LogicException("Unexpected batch cursor [{$before}]."),
+        },
+    );
 
-    app()->instance(NavigationCounts::class, new NavigationCounts($redis, $jobs, $database, $queues, $masters));
+    app()->instance(NavigationCounts::class, new NavigationCounts(
+        $redis,
+        $jobs,
+        new BatchRepositoryOverview($batches, app(CacheFactory::class)),
+        $queues,
+        $masters,
+    ));
 
     get('/horizon')
         ->assertOk()

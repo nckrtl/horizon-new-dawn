@@ -6,6 +6,7 @@ namespace NckRtl\HorizonNewDawn\Jobs;
 
 use Illuminate\Contracts\Queue\Factory as QueueFactory;
 use Illuminate\Contracts\Redis\Factory as RedisFactory;
+use Illuminate\Pagination\Cursor;
 use Illuminate\Queue\RedisQueue;
 use Illuminate\Redis\Connections\Connection;
 use Illuminate\Redis\Connections\PhpRedisConnection;
@@ -13,6 +14,7 @@ use Illuminate\Support\Str;
 use JsonException;
 use Laravel\Horizon\Contracts\SupervisorRepository;
 use Laravel\Horizon\ProvisioningPlan;
+use Throwable;
 
 final readonly class PendingJobPaginator
 {
@@ -22,6 +24,27 @@ final readonly class PendingJobPaginator
         private SupervisorRepository $supervisors,
     ) {}
 
+    public function page(int|string|null $cursor, int $limit): PendingJobPage
+    {
+        $current = $this->normalizeCursor($cursor);
+
+        if ($limit <= 0) {
+            return new PendingJobPage([], $current, null);
+        }
+
+        $ordered = $this->ordered();
+        $startingAt = $this->startingAt($ordered, $current);
+        $rows = array_slice($ordered, $startingAt, $limit);
+        $hasMore = count($ordered) > $startingAt + count($rows);
+        $last = $rows[array_key_last($rows)] ?? null;
+
+        return new PendingJobPage(
+            ids: array_column($rows, 'id'),
+            current: $current,
+            next: $hasMore && is_array($last) ? $this->encodeCursor($last) : null,
+        );
+    }
+
     /** @return array<int, string> */
     public function ids(int $startingAt, int $limit): array
     {
@@ -29,11 +52,21 @@ final readonly class PendingJobPaginator
             return [];
         }
 
-        $pendingScores = $this->pendingScores();
+        return array_column(
+            array_slice($this->ordered(), max(0, $startingAt), $limit),
+            'id',
+        );
+    }
+
+    /**
+     * @return array<int, array{id: string, availableAt: float, pushedAt: float}>
+     */
+    private function ordered(): array
+    {
         $scheduledScores = $this->scheduledScores();
         $ordered = [];
 
-        foreach ($pendingScores as $id => $score) {
+        foreach ($this->pendingScores() as $id => $score) {
             $pushedAt = abs($score);
             $ordered[] = [
                 'id' => $id,
@@ -44,23 +77,124 @@ final readonly class PendingJobPaginator
 
         usort(
             $ordered,
-            static function (array $left, array $right): int {
-                $order = $left['availableAt'] <=> $right['availableAt'];
-
-                if ($order !== 0) {
-                    return $order;
-                }
-
-                $order = $left['pushedAt'] <=> $right['pushedAt'];
-
-                return $order !== 0 ? $order : strcmp($left['id'], $right['id']);
-            },
+            $this->compare(...),
         );
 
-        return array_column(
-            array_slice($ordered, max(0, $startingAt), $limit),
-            'id',
-        );
+        return $ordered;
+    }
+
+    /**
+     * @param  array<int, array{id: string, availableAt: float, pushedAt: float}>  $ordered
+     */
+    private function startingAt(array $ordered, int|string|null $cursor): int
+    {
+        if (is_int($cursor) || (is_string($cursor) && preg_match('/^-?\d+$/D', $cursor) === 1)) {
+            return max(0, (int) $cursor + 1);
+        }
+
+        $position = $this->decodeCursor($cursor);
+
+        if ($position === null) {
+            return 0;
+        }
+
+        foreach ($ordered as $index => $row) {
+            if ($this->compare($row, $position) > 0) {
+                return $index;
+            }
+        }
+
+        return count($ordered);
+    }
+
+    private function normalizeCursor(int|string|null $cursor): int|string
+    {
+        if (is_int($cursor)) {
+            return $cursor;
+        }
+
+        if (is_string($cursor) && preg_match('/^-?\d+$/D', $cursor) === 1) {
+            return (int) $cursor;
+        }
+
+        if (! is_string($cursor) || $this->decodeCursor($cursor) === null) {
+            return -1;
+        }
+
+        return $cursor;
+    }
+
+    /**
+     * @param  array{id: string, availableAt: float, pushedAt: float}  $left
+     * @param  array{id: string, availableAt: float, pushedAt: float}  $right
+     */
+    private function compare(array $left, array $right): int
+    {
+        $order = $left['availableAt'] <=> $right['availableAt'];
+
+        if ($order !== 0) {
+            return $order;
+        }
+
+        $order = $left['pushedAt'] <=> $right['pushedAt'];
+
+        return $order !== 0 ? $order : strcmp($left['id'], $right['id']);
+    }
+
+    /**
+     * @param  array{id: string, availableAt: float, pushedAt: float}  $row
+     */
+    private function encodeCursor(array $row): string
+    {
+        return (new Cursor([
+            'version' => 1,
+            'availableAt' => $row['availableAt'],
+            'pushedAt' => $row['pushedAt'],
+            'id' => $row['id'],
+        ]))->encode();
+    }
+
+    /**
+     * @return array{id: string, availableAt: float, pushedAt: float}|null
+     */
+    private function decodeCursor(int|string|null $encoded): ?array
+    {
+        if (! is_string($encoded) || $encoded === '') {
+            return null;
+        }
+
+        try {
+            $cursor = Cursor::fromEncoded($encoded);
+
+            if ($cursor === null || $cursor->pointsToNextItems() !== true) {
+                return null;
+            }
+
+            [$version, $availableAt, $pushedAt, $id] = $cursor->parameters([
+                'version',
+                'availableAt',
+                'pushedAt',
+                'id',
+            ]);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (
+            $version !== 1
+            || ! is_numeric($availableAt)
+            || ! is_numeric($pushedAt)
+            || ! is_string($id)
+            || $id === ''
+        ) {
+            return null;
+        }
+
+        return [
+            'id' => $id,
+            'availableAt' => (float) $availableAt,
+            'pushedAt' => (float) $pushedAt,
+        ];
     }
 
     /** @return array<string, float> */
@@ -150,25 +284,23 @@ final readonly class PendingJobPaginator
             }
         }
 
-        if ($targets === []) {
-            $environment = config('horizon.env') ?? config('app.env');
-            $plans = ProvisioningPlan::get('horizon-new-dawn')->toSupervisorOptions();
+        $environment = config('horizon.env') ?? config('app.env');
+        $plans = ProvisioningPlan::get('horizon-new-dawn')->toSupervisorOptions();
 
-            foreach ($plans as $pattern => $supervisors) {
-                if (! is_string($environment) || ! Str::is((string) $pattern, $environment)) {
-                    continue;
-                }
-
-                foreach ($supervisors as $supervisor) {
-                    $this->addTargets(
-                        $targets,
-                        is_string($supervisor->connection ?? null) ? $supervisor->connection : '',
-                        is_string($supervisor->queue ?? null) ? $supervisor->queue : '',
-                    );
-                }
-
-                break;
+        foreach ($plans as $pattern => $supervisors) {
+            if (! is_string($environment) || ! Str::is((string) $pattern, $environment)) {
+                continue;
             }
+
+            foreach ($supervisors as $supervisor) {
+                $this->addTargets(
+                    $targets,
+                    is_string($supervisor->connection ?? null) ? $supervisor->connection : '',
+                    is_string($supervisor->queue ?? null) ? $supervisor->queue : '',
+                );
+            }
+
+            break;
         }
 
         return array_values($targets);

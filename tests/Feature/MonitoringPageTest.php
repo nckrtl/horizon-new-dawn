@@ -151,8 +151,49 @@ describe('monitoring pages', function (): void {
         );
     });
 
+    it('rejects tags that collide with Horizon storage', function (string $tag): void {
+        Bus::fake();
+
+        post('/horizon/monitoring', ['tag' => $tag])
+            ->assertRedirect()
+            ->assertSessionHasErrors('tag');
+
+        Bus::assertNotDispatched(HorizonMonitorTag::class);
+    })->with([
+        'pending jobs index' => 'pending_jobs',
+        'failed jobs index' => 'failed_jobs',
+        'global job id counter' => 'job_id',
+        'master index' => 'masters',
+        'command queue namespace' => 'commands:horizon-host',
+        'failed tag namespace' => 'failed:checkout',
+        'job metrics namespace' => 'snapshot:job:App\\Jobs\\ImportUsers',
+        'notification lock namespace' => 'notification:long-wait',
+        'orphan process namespace' => 'horizon-host:orphans',
+    ]);
+
+    it('allows ordinary application tag formats', function (string $tag): void {
+        Bus::fake();
+
+        post('/horizon/monitoring', ['tag' => $tag])
+            ->assertRedirect()
+            ->assertSessionHas('toast.success', "Now monitoring {$tag}.");
+
+        Bus::assertDispatched(
+            HorizonMonitorTag::class,
+            fn (HorizonMonitorTag $job): bool => $job->tag === $tag,
+        );
+    })->with([
+        'model tag' => 'App\\Models\\User:42',
+        'tenant tag' => 'tenant:acme',
+        'namespace tag' => 'namespace\\job',
+        'slash tag' => 'customer/42',
+    ]);
+
     it('stops monitoring a tag and honors Horizon authorization', function (): void {
         Bus::fake();
+        $tags = mockDashboardContract(TagRepository::class);
+        dashboardReturns($tags, 'monitoring', ['checkout']);
+        app()->instance(TagRepository::class, $tags);
 
         delete('/horizon/monitoring/actions/stop/checkout')
             ->assertRedirect()
@@ -169,6 +210,9 @@ describe('monitoring pages', function (): void {
 
     it('stops monitoring a slash-bearing tag beginning with an action-like segment', function (): void {
         Bus::fake();
+        $tags = mockDashboardContract(TagRepository::class);
+        dashboardReturns($tags, 'monitoring', ['jobs/customer']);
+        app()->instance(TagRepository::class, $tags);
 
         delete('/horizon/monitoring/actions/stop/jobs%2Fcustomer')
             ->assertRedirect()
@@ -182,6 +226,7 @@ describe('monitoring pages', function (): void {
 
     it('clears recent jobs while keeping the tag monitored', function (): void {
         $tags = mockDashboardContract(TagRepository::class);
+        dashboardReturns($tags, 'monitoring', ['customer/jobs']);
         dashboardReturnsUsing($tags, 'paginate', static fn (string $tag, int $startingAt, int $limit): array => match ([$tag, $startingAt, $limit]) {
             ['customer/jobs', 0, 50] => ['recent-1', 'recent-2'],
             default => [],
@@ -210,6 +255,7 @@ describe('monitoring pages', function (): void {
         $retried->payload = json_encode([...$payload, 'retry_of' => 'original-2'], JSON_THROW_ON_ERROR);
 
         $tags = mockDashboardContract(TagRepository::class);
+        dashboardReturns($tags, 'monitoring', ['customer/42']);
         dashboardReturnsUsing($tags, 'paginate', static fn (string $tag, int $startingAt, int $limit): array => match ([$tag, $startingAt, $limit]) {
             ['failed:customer/42', 0, 50] => ['failed-1', 'failed-2'],
             default => [],

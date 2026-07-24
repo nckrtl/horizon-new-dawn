@@ -10,6 +10,7 @@ final class SupervisorDetailsData extends Data
 {
     /**
      * @param  array<int, string>  $queues
+     * @param  int|array<int, int>|null  $backoff
      * @param  array<int, SupervisorWarningData>  $warnings
      */
     public function __construct(
@@ -31,7 +32,7 @@ final class SupervisorDetailsData extends Data
         public readonly ?int $timeout,
         public readonly ?int $retryAfter,
         public readonly ?int $maxTries,
-        public readonly ?int $backoff,
+        public readonly int|array|null $backoff,
         public readonly ?int $maxJobs,
         public readonly ?int $maxTime,
         public readonly ?int $sleep,

@@ -3,14 +3,9 @@
 declare(strict_types=1);
 
 use Illuminate\Bus\BatchRepository;
-use Illuminate\Database\ConnectionInterface;
-use Illuminate\Database\ConnectionResolverInterface;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Date;
 use Laravel\Horizon\Contracts\JobRepository;
-use Mockery\CompositeExpectation;
-use Mockery\Expectation;
 use Mockery\MockInterface;
 use NckRtl\HorizonNewDawn\Batches\BatchCreatedRange;
 use NckRtl\HorizonNewDawn\Batches\BatchesData;
@@ -18,7 +13,9 @@ use NckRtl\HorizonNewDawn\Batches\BatchJobsData;
 use NckRtl\HorizonNewDawn\Jobs\JobsData;
 use NckRtl\HorizonNewDawn\Tests\Support\HorizonJob;
 
+use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturns;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsFor;
+use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsUsing;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardThrows;
 use function NckRtl\HorizonNewDawn\Tests\Support\horizonBatch;
 use function NckRtl\HorizonNewDawn\Tests\Support\horizonJob;
@@ -117,6 +114,7 @@ describe('BatchesData', function (): void {
             horizonBatch('finished', totalJobs: 100, pendingJobs: 0, failedJobs: 3, finishedAt: 1_784_281_100),
             horizonBatch('cancelled', name: '', totalJobs: 100, pendingJobs: 40, cancelledAt: 1_784_281_050),
         ]);
+        dashboardReturnsFor($repository, 'get', [46, 'cancelled'], []);
         $jobs = mockDashboardContract(JobRepository::class);
 
         $page = batchData($repository, $jobs)->page(null, null);
@@ -210,39 +208,64 @@ describe('BatchesData', function (): void {
         expect(batchData($repository, $jobs)->find('missing'))->toBeNull();
     });
 
-    it('escapes percent and underscore search wildcards', function (): void {
-        config()->set('queue.batching.database', null);
+    it('searches for literal percent and underscore characters through the batch repository', function (): void {
         $repository = mockDashboardContract(BatchRepository::class);
-        $jobs = mockDashboardContract(JobRepository::class);
-        $resolver = mockDashboardContract(ConnectionResolverInterface::class);
-        $connection = mockDashboardContract(ConnectionInterface::class);
-        $builder = mockDashboardContract(Builder::class);
-        $nested = mockDashboardContract(Builder::class);
-
-        dashboardReturnsFor($resolver, 'connection', [null], $connection);
-        dashboardReturnsFor($connection, 'table', ['job_batches'], $builder);
-        dashboardReturnsFor($nested, 'where', ['name', 'like', '%100\%\_done%'], $nested);
-        dashboardReturnsFor($nested, 'orWhere', ['id', 'like', '%100\%\_done%'], $nested);
-        batchReturnsForClosure(
-            $builder,
-            'where',
-            function (Closure $scope) use ($builder, $nested) {
-                $scope($nested);
-
-                return $builder;
+        $matching = horizonBatch('batch-z', name: 'Import 100%_done');
+        $other = horizonBatch('batch-y', name: 'Import completed orders');
+        dashboardReturnsUsing(
+            $repository,
+            'get',
+            static fn (int $limit, ?string $before): array => match ($before) {
+                null => [$matching, $other],
+                'batch-y' => [],
+                default => throw new LogicException("Unexpected batch cursor [{$before}]."),
             },
         );
-        dashboardReturnsFor($builder, 'orderByDesc', ['id'], $builder);
-        dashboardReturnsFor($builder, 'limit', [50], $builder);
-        dashboardReturnsFor($builder, 'pluck', ['id'], collect());
+        $jobs = mockDashboardContract(JobRepository::class);
 
-        $data = new BatchesData(
+        $page = batchData($repository, $jobs)->page(null, '100%_done');
+
+        expect($page->available)->toBeTrue()
+            ->and(array_map(static fn ($batch): string => $batch->id, $page->batches))
+            ->toBe(['batch-z']);
+    });
+
+    it('continues repository searches after a short nonempty source page', function (): void {
+        $repository = mockDashboardContract(BatchRepository::class);
+        dashboardReturnsUsing(
             $repository,
-            new BatchJobsData($jobs, new JobsData($jobs)),
-            $resolver,
+            'get',
+            static fn (int $limit, ?string $before): array => match ($before) {
+                null => [horizonBatch('batch-z', name: 'Unrelated')],
+                'batch-z' => [horizonBatch('batch-y', name: 'Needle import')],
+                'batch-y' => [],
+                default => throw new LogicException("Unexpected batch cursor [{$before}]."),
+            },
         );
+        $jobs = mockDashboardContract(JobRepository::class);
 
-        expect($data->search('100%_done', null))->toBe([]);
+        $page = batchData($repository, $jobs)->page(null, 'needle');
+
+        expect($page->available)->toBeTrue()
+            ->and(array_map(static fn ($batch): string => $batch->id, $page->batches))
+            ->toBe(['batch-y'])
+            ->and($page->next)->toBeNull();
+    });
+
+    it('returns an unavailable page when the repository cursor does not advance', function (): void {
+        $repository = mockDashboardContract(BatchRepository::class);
+        dashboardReturns(
+            $repository,
+            'get',
+            [horizonBatch('batch-z', name: 'Unrelated')],
+        );
+        $jobs = mockDashboardContract(JobRepository::class);
+
+        $page = batchData($repository, $jobs)->page(null, 'needle');
+
+        expect($page->available)->toBeFalse()
+            ->and($page->batches)->toBe([])
+            ->and($page->next)->toBeNull();
     });
 
     it('filters queue connection and created range before returning a page', function (): void {
@@ -272,6 +295,7 @@ describe('BatchesData', function (): void {
             $wrongConnection,
             $tooOld,
         ]);
+        dashboardReturnsFor($repository, 'get', [50, 'too-old'], []);
         $jobs = mockDashboardContract(JobRepository::class);
 
         $page = batchData($repository, $jobs)->page(
@@ -316,7 +340,6 @@ function batchData(
     return new BatchesData(
         $batches,
         new BatchJobsData($jobs, new JobsData($jobs)),
-        app(ConnectionResolverInterface::class),
     );
 }
 
@@ -329,28 +352,4 @@ function batchDataJob(int $index, string $id, string $batchId, string $status): 
     $job->status = $status;
 
     return $job;
-}
-
-function batchReturnsForClosure(MockInterface $mock, string $method, Closure $return): void
-{
-    $expectation = $mock->shouldReceive($method);
-
-    if ($expectation instanceof Expectation) {
-        $expectation
-            ->with(Mockery::type(Closure::class))
-            ->once()
-            ->andReturnUsing($return);
-
-        return;
-    }
-
-    if ($expectation instanceof CompositeExpectation) {
-        $expectation->__call('with', [Mockery::type(Closure::class)]);
-        $expectation->__call('once', []);
-        $expectation->__call('andReturnUsing', [$return]);
-
-        return;
-    }
-
-    throw new LogicException("Unable to configure {$method} expectation.");
 }

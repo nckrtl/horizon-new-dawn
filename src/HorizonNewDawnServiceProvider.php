@@ -13,12 +13,14 @@ use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 use Laravel\Horizon\Contracts\WorkloadRepository;
 use Laravel\Horizon\Http\Controllers\HomeController as HorizonHomeController;
+use Laravel\Horizon\Http\Controllers\MonitoringController as HorizonMonitoringController;
 use Laravel\Horizon\Http\Middleware\Authenticate;
 use Laravel\Horizon\WaitTimeCalculator;
 use NckRtl\HorizonNewDawn\Assets\AssetPath;
 use NckRtl\HorizonNewDawn\Console\InstallCommand;
 use NckRtl\HorizonNewDawn\Dashboard\DashboardPendingState;
 use NckRtl\HorizonNewDawn\Http\Controllers\HomeController;
+use NckRtl\HorizonNewDawn\Http\Controllers\MonitoringApiController;
 use NckRtl\HorizonNewDawn\Http\Middleware\HandleInertiaRequests;
 use NckRtl\HorizonNewDawn\Jobs\ForgetsPendingJob;
 use NckRtl\HorizonNewDawn\Jobs\JobsData;
@@ -39,6 +41,7 @@ final class HorizonNewDawnServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(HorizonHomeController::class, HomeController::class);
+        $this->app->bind(HorizonMonitoringController::class, MonitoringApiController::class);
         $this->app->bind(ClearsQueueMetadata::class, ClearQueueMetadata::class);
         $this->app->bind(ForgetsPendingJob::class, ClearQueueMetadata::class);
         $this->app->bind(

@@ -31,7 +31,12 @@ import {
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { show as supervisorShow } from "@/generated/routes/horizon-new-dawn/supervisors";
-import { useSortableRows, type SortColumn } from "@/hooks/use-sortable-rows";
+import {
+  sortRows,
+  useSortableRows,
+  type SortColumn,
+  type SortState,
+} from "@/hooks/use-sortable-rows";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { isInteractiveTarget } from "@/lib/interactive-target";
 import { cn } from "@/lib/utils";
@@ -49,6 +54,7 @@ const columns: SortColumn<SupervisorItem>[] = [
   { key: "processes", value: (item) => item.processes },
   { key: "balancing", value: (item) => item.balancing },
 ];
+const emptySupervisorRows: readonly SupervisorItem[] = [];
 
 function directionFor(key: string, sort: { key: string; direction: "asc" | "desc" } | null) {
   return sort?.key === key ? sort.direction : undefined;
@@ -59,16 +65,17 @@ function HorizonInstance({
   group,
   hasMoreThanTwoInstances,
   horizonBaseUrl,
+  sort,
+  onSort,
 }: {
   autoRefreshEnabled: boolean;
   group: DashboardSupervisors["groups"][number];
   hasMoreThanTwoInstances: boolean;
   horizonBaseUrl: string;
+  sort: SortState | null;
+  onSort: (key: string) => void;
 }) {
-  const sorted = useSortableRows(group.items, columns, {
-    persist: true,
-    prefix: "supervisors",
-  });
+  const rows = sortRows(group.items, columns, sort);
   const status = normalizeStatus(group.status);
 
   return (
@@ -117,8 +124,8 @@ function HorizonInstance({
                     : `${column.key[0].toUpperCase()}${column.key.slice(1)}`
                 }
                 columnKey={column.key}
-                direction={directionFor(column.key, sorted.sort)}
-                onSort={sorted.toggle}
+                direction={directionFor(column.key, sort)}
+                onSort={onSort}
                 className={
                   column.key === "processes" || column.key === "balancing"
                     ? "px-6 text-right"
@@ -130,14 +137,14 @@ function HorizonInstance({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sorted.rows.length === 0 ? (
+          {rows.length === 0 ? (
             <TableEmpty
               columns={group.local ? 7 : 6}
               title="No supervisors"
               icon={DashboardNavigationIcon}
             />
           ) : null}
-          {sorted.rows.map((item) => {
+          {rows.map((item) => {
             const scaling = autoRefreshEnabled ? item.scaling : null;
             const detailUrl = resolveHorizonRoute(
               supervisorShow(encodeURIComponent(item.id)),
@@ -350,6 +357,11 @@ export function SupervisorsTable({
   supervisors: DashboardSupervisors;
   horizonBaseUrl: string;
 }) {
+  const sorting = useSortableRows(emptySupervisorRows, columns, {
+    persist: true,
+    prefix: "supervisors",
+  });
+
   if (!supervisors.available) {
     return (
       <Alert variant="destructive">
@@ -424,6 +436,8 @@ export function SupervisorsTable({
               group={group}
               hasMoreThanTwoInstances={supervisors.groups.length > 2}
               horizonBaseUrl={horizonBaseUrl}
+              sort={sorting.sort}
+              onSort={sorting.toggle}
               key={group.name}
             />
           ))}

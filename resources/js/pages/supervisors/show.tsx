@@ -136,7 +136,7 @@ function workerProperties(supervisor: SupervisorDetails): Property[] {
             ? "Unlimited unless defined by the job"
             : numberFormatter.format(supervisor.maxTries),
     },
-    { label: "Backoff", value: seconds(supervisor.backoff) },
+    { label: "Backoff", value: backoff(supervisor.backoff) },
     { label: "Maximum jobs", value: maximum(supervisor.maxJobs) },
     { label: "Maximum lifetime", value: maximumDuration(supervisor.maxTime) },
     { label: "Sleep", value: seconds(supervisor.sleep) },
@@ -210,6 +210,14 @@ function seconds(value: number | null): string {
   }
 
   return `${numberFormatter.format(value)} ${value === 1 ? "second" : "seconds"}`;
+}
+
+function backoff(value: number | number[] | null): string {
+  if (Array.isArray(value)) {
+    return value.length === 0 ? "—" : value.map((secondsValue) => seconds(secondsValue)).join(", ");
+  }
+
+  return seconds(value);
 }
 
 function maximum(value: number | null): string {

@@ -1,0 +1,1 @@
+import{n as e}from"./url-query-m1-om6TI.js";import{Ei as t,qi as n}from"./app-Bs6blccF.js";var r=n(t(),1);function i(t){(0,r.useEffect)(()=>{let n=()=>e({tab:t}),r=window.setTimeout(n,0);return document.addEventListener(`inertia:navigate`,n),()=>{window.clearTimeout(r),document.removeEventListener(`inertia:navigate`,n)}},[t])}export{i as t};

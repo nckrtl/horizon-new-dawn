@@ -47,6 +47,7 @@ const emptyBatchClearCounts: BatchClearCounts = {
   cancelled: 0,
   available: false,
 };
+const batchRefreshProps = ["batchClearCounts"];
 
 function BatchesIndex({
   horizon,
@@ -78,6 +79,7 @@ function BatchesIndex({
     polling: query === "" && search.trim() === "",
     cursor: "before_id",
     items: batches.data,
+    additionalProps: batchRefreshProps,
     scope: filterScope,
   });
   const batchCounts = useMemo(() => {
@@ -133,7 +135,7 @@ function BatchesIndex({
         url,
         {},
         {
-          only: ["query", "filters", "batches", "horizon"],
+          only: ["query", "filters", "batchClearCounts", "batches", "horizon"],
           preserveScroll: true,
           preserveState: true,
           replace: true,
@@ -161,7 +163,7 @@ function BatchesIndex({
       url,
       {},
       {
-        only: ["filters", "batches", "horizon"],
+        only: ["filters", "batchClearCounts", "batches", "horizon"],
         preserveScroll: true,
         preserveState: true,
         replace: true,

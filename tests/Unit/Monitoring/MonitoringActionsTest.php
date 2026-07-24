@@ -16,16 +16,21 @@ use NckRtl\HorizonNewDawn\Monitoring\Actions\ClearRecentJobs;
 use NckRtl\HorizonNewDawn\Monitoring\Actions\MonitorTag;
 use NckRtl\HorizonNewDawn\Monitoring\Actions\RetryFailedJobs;
 use NckRtl\HorizonNewDawn\Monitoring\Actions\StopMonitoringTag;
+use NckRtl\HorizonNewDawn\Monitoring\MonitoringTagGuard;
 
+use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturns;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsFor;
 use function NckRtl\HorizonNewDawn\Tests\Support\horizonJob;
 use function NckRtl\HorizonNewDawn\Tests\Support\mockDashboardContract;
 
 it('dispatches supported Horizon monitor-tag jobs', function (): void {
     Bus::fake();
+    $tags = mockDashboardContract(TagRepository::class);
+    dashboardReturns($tags, 'monitoring', ['checkout']);
+    app()->instance(TagRepository::class, $tags);
 
-    (new MonitorTag(app(Dispatcher::class)))->handle('checkout');
-    (new StopMonitoringTag(app(Dispatcher::class)))->handle('checkout');
+    app(MonitorTag::class)->handle('checkout');
+    app(StopMonitoringTag::class)->handle('checkout');
 
     Bus::assertDispatched(
         HorizonMonitorTag::class,
@@ -41,6 +46,7 @@ it('clears recent jobs without stopping monitoring', function (): void {
     $first = array_map(static fn (int $index): string => "recent-{$index}", range(0, 49));
     $second = ['recent-50', 'recent-51'];
     $tags = mockDashboardContract(TagRepository::class);
+    dashboardReturns($tags, 'monitoring', ['customer:42']);
     dashboardReturnsFor($tags, 'paginate', ['customer:42', 0, 50], $first);
     dashboardReturnsFor($tags, 'paginate', ['customer:42', 50, 50], $second);
     dashboardReturnsFor($tags, 'forget', ['customer:42'], null);
@@ -49,10 +55,44 @@ it('clears recent jobs without stopping monitoring', function (): void {
     dashboardReturnsFor($jobs, 'deleteMonitored', [$first], null);
     dashboardReturnsFor($jobs, 'deleteMonitored', [$second], null);
 
-    $cleared = (new ClearRecentJobs($tags, $jobs))->handle('customer:42');
+    $cleared = (new ClearRecentJobs($tags, $jobs, new MonitoringTagGuard))->handle('customer:42');
 
     expect($cleared)->toBe(52);
     $tags->shouldNotHaveReceived('stopMonitoring');
+});
+
+it('rejects internal Horizon keys before clearing monitored jobs', function (string $tag): void {
+    $tags = mockDashboardContract(TagRepository::class);
+    dashboardReturns($tags, 'monitoring', [$tag]);
+    dashboardReturns($tags, 'paginate', []);
+    dashboardReturns($tags, 'forget', null);
+    $jobs = mockDashboardContract(JobRepository::class);
+    dashboardReturns($jobs, 'deleteMonitored', null);
+
+    app()->instance(TagRepository::class, $tags);
+    app()->instance(JobRepository::class, $jobs);
+
+    expect(fn (): int => app(ClearRecentJobs::class)->handle($tag))
+        ->toThrow(InvalidArgumentException::class);
+
+    $tags->shouldNotHaveReceived('paginate');
+    $tags->shouldNotHaveReceived('forget');
+    $jobs->shouldNotHaveReceived('deleteMonitored');
+})->with([
+    'pending jobs index' => 'pending_jobs',
+    'global job id counter' => 'job_id',
+]);
+
+it('rejects unmonitored tags before dispatching destructive Horizon jobs', function (): void {
+    Bus::fake();
+    $tags = mockDashboardContract(TagRepository::class);
+    dashboardReturns($tags, 'monitoring', ['checkout']);
+    app()->instance(TagRepository::class, $tags);
+
+    expect(fn () => app(StopMonitoringTag::class)->handle('customer:42'))
+        ->toThrow(InvalidArgumentException::class);
+
+    Bus::assertNotDispatched(HorizonStopMonitoringTag::class);
 });
 
 it('retries eligible failed jobs for a monitored tag', function (): void {
@@ -85,6 +125,7 @@ it('retries eligible failed jobs for a monitored tag', function (): void {
     ]);
 
     $tags = mockDashboardContract(TagRepository::class);
+    dashboardReturns($tags, 'monitoring', ['customer:42']);
     dashboardReturnsFor($tags, 'paginate', ['failed:customer:42', 0, 50], $firstIds);
     dashboardReturnsFor($tags, 'paginate', ['failed:customer:42', 50, 50], $secondIds);
 
@@ -96,6 +137,7 @@ it('retries eligible failed jobs for a monitored tag', function (): void {
         $tags,
         $jobs,
         new RetryFailedJob(app(Dispatcher::class), $jobs, new FailedJobRetryEligibility),
+        new MonitoringTagGuard,
     ))->handle('customer:42');
 
     expect($scheduled)->toBe(48);
