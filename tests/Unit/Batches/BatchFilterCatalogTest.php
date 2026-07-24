@@ -48,11 +48,11 @@ it('scans retained batch pages into distinct sorted queue and connection filters
         },
     );
 
-    $catalog = new BatchFilterCatalog(
+    $catalog = (new BatchFilterCatalog(
         $repository,
         catalogBatchData($repository),
         app(CacheFactory::class),
-    )->get();
+    ))->get();
 
     expect($catalog->available)->toBeTrue()
         ->and($catalog->queues)->toBe(['default', 'imports', 'reports'])
@@ -76,11 +76,11 @@ it('excludes null connections while keeping the default queue fallback', functio
         },
     );
 
-    $catalog = new BatchFilterCatalog(
+    $catalog = (new BatchFilterCatalog(
         $repository,
         catalogBatchData($repository),
         app(CacheFactory::class),
-    )->get();
+    ))->get();
 
     expect($catalog->available)->toBeTrue()
         ->and($catalog->queues)->toBe(['default'])
@@ -99,11 +99,11 @@ it('returns an unavailable catalog when the repository repeats its final cursor'
         },
     );
 
-    $catalog = new BatchFilterCatalog(
+    $catalog = (new BatchFilterCatalog(
         $repository,
         catalogBatchData($repository),
         app(CacheFactory::class),
-    )->get();
+    ))->get();
 
     expect($catalog->available)->toBeFalse()
         ->and($catalog->queues)->toBe([])
@@ -121,11 +121,11 @@ it('returns an unavailable catalog when the repository ends a page with a blank 
         },
     );
 
-    $catalog = new BatchFilterCatalog(
+    $catalog = (new BatchFilterCatalog(
         $repository,
         catalogBatchData($repository),
         app(CacheFactory::class),
-    )->get();
+    ))->get();
 
     expect($catalog->available)->toBeFalse()
         ->and($catalog->queues)->toBe([])
@@ -144,11 +144,11 @@ it('returns an unavailable catalog when the repository cursor increases on a lat
         },
     );
 
-    $catalog = new BatchFilterCatalog(
+    $catalog = (new BatchFilterCatalog(
         $repository,
         catalogBatchData($repository),
         app(CacheFactory::class),
-    )->get();
+    ))->get();
 
     expect($catalog->available)->toBeFalse()
         ->and($catalog->queues)->toBe([])
@@ -262,11 +262,11 @@ it('falls back to a repository-built catalog when the cache store fails', functi
         exception: new RuntimeException('cache store unavailable'),
     );
 
-    $catalog = new BatchFilterCatalog(
+    $catalog = (new BatchFilterCatalog(
         $repository,
         catalogBatchData($repository),
         $cache,
-    )->get();
+    ))->get();
 
     expect($catalog->toArray())->toBe([
         'available' => true,
