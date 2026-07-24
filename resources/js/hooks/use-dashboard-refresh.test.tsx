@@ -59,6 +59,18 @@ describe("useDashboardRefresh", () => {
     });
   });
 
+  it("does not restart or reload an already active poll on a page rerender", () => {
+    const { rerender } = render(<RefreshHarness interval={5000} enabled />);
+
+    expect(start).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
+
+    rerender(<RefreshHarness interval={5000} enabled />);
+
+    expect(start).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it("refreshes an explicit detail-page prop", () => {
     render(<RefreshHarness interval={5000} props={["batch"]} />);
 

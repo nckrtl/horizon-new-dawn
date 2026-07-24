@@ -5,7 +5,7 @@
 
 Horizon New Dawn replaces Laravel Horizon's bundled interface with a package-owned React 19 and Inertia 3 application while keeping Horizon's authorization, repositories, metrics, and queue workers in charge.
 
-The package reads Horizon data in PHP and sends structured page props through Inertia. It does not add a second browser-facing API layer, and it leaves Horizon's existing API controllers untouched.
+The package reads Horizon data in PHP and sends structured page props through Inertia. It does not add a second general browser-facing API layer. Horizon's API routes remain available; New Dawn wraps only monitoring mutations to enforce the same reserved-key and monitored-tag safety checks as its interface.
 
 ![Horizon New Dawn dashboard showing queue health, workload, and Horizon instances](docs/images/dashboard.jpg)
 
@@ -36,6 +36,8 @@ These floors are deliberate:
 Queue pausing is available when the installed Laravel version provides its complete queue-pause API (Laravel 12.40.2 or newer). On Laravel 12.38 through 12.40.1, New Dawn hides only the unsupported pause and resume controls; retrying failures and clearing queues remain available.
 
 Redis Cluster is not currently supported. Queue metadata cleanup uses Redis key scans and Lua operations that have not yet been made cluster-slot aware, so Horizon and its queues must use a standalone Redis connection.
+
+New Dawn reads and mutates Laravel batch metadata through the application's configured `BatchRepository`, including Laravel's database and DynamoDB implementations. This does not make DynamoDB a Horizon queue backend: Horizon still requires Redis for queues and supervisors.
 
 ## Installation
 
@@ -101,7 +103,7 @@ New Dawn provides dedicated Inertia routes for:
 
 The interface uses a persistent responsive layout composed from shadcn/ui primitives. It supports light, dark, and system themes; sortable data tables; Inertia-powered infinite scrolling backed by Horizon cursors; optional automatic refreshes; responsive navigation; and Inertia mutations with toast feedback. Generated Wayfinder routes are rebased at runtime, so links and actions continue to work with a custom Horizon path or an absolute domain URL.
 
-Horizon API routes remain available and unchanged. Unsupported legacy UI paths return `404` instead of silently falling back to Horizon's Vue application.
+Horizon API routes remain available. Monitoring read responses keep Horizon's existing contract, while monitoring mutations apply New Dawn's reserved-key and currently-monitored tag guards. Unsupported legacy UI paths return `404` instead of silently falling back to Horizon's Vue application.
 
 ## Configuration
 

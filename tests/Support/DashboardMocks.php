@@ -67,6 +67,81 @@ function dashboardReturnsUsing(MockInterface $mock, string $method, Closure $ret
     throw new LogicException("Unable to configure {$method} expectation.");
 }
 
+/**
+ * @param  array<int, mixed>  $arguments
+ * @param  'never'|'once'|'twice'|'zeroOrMoreTimes'  $times
+ */
+function dashboardExpects(
+    MockInterface $mock,
+    string $method,
+    array $arguments = [],
+    string $times = 'once',
+    mixed $value = null,
+    ?Closure $returnUsing = null,
+    ?Throwable $exception = null,
+    bool $ordered = false,
+): void {
+    $expectation = $mock->shouldReceive($method);
+
+    if ($expectation instanceof Expectation) {
+        if ($arguments !== []) {
+            $expectation->with(...$arguments);
+        }
+
+        $expectation->{$times}();
+
+        if ($ordered) {
+            $expectation->ordered();
+        }
+
+        if ($returnUsing instanceof Closure) {
+            $expectation->andReturnUsing($returnUsing);
+
+            return;
+        }
+
+        if ($exception instanceof Throwable) {
+            $expectation->andThrow($exception);
+
+            return;
+        }
+
+        $expectation->andReturn($value);
+
+        return;
+    }
+
+    if ($expectation instanceof CompositeExpectation) {
+        if ($arguments !== []) {
+            $expectation->__call('with', $arguments);
+        }
+
+        $expectation->__call($times, []);
+
+        if ($ordered) {
+            $expectation->__call('ordered', []);
+        }
+
+        if ($returnUsing instanceof Closure) {
+            $expectation->__call('andReturnUsing', [$returnUsing]);
+
+            return;
+        }
+
+        if ($exception instanceof Throwable) {
+            $expectation->__call('andThrow', [$exception]);
+
+            return;
+        }
+
+        $expectation->__call('andReturn', [$value]);
+
+        return;
+    }
+
+    throw new LogicException("Unable to configure {$method} expectation.");
+}
+
 /** @param array<int, mixed> $arguments */
 function dashboardReturnsFor(
     MockInterface $mock,

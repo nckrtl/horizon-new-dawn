@@ -75,6 +75,22 @@ describe('metrics pages', function (): void {
                 ->where('preview.data.1.runtime', null));
     });
 
+    it('decodes slash-bearing metric slugs before reading the repository', function (): void {
+        $repository = mockDashboardContract(MetricsRepository::class);
+        dashboardReturnsFor($repository, 'snapshotsForJob', ['App\\Jobs\\Import/Orders'], [
+            (object) ['time' => 1784387100, 'throughput' => 19, 'runtime' => 2500],
+        ]);
+        app()->instance(MetricsData::class, new MetricsData($repository));
+
+        get('/horizon/metrics/jobs/App%5CJobs%5CImport%2FOrders')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page): AssertableInertia => $page
+                ->component('Metrics/Show')
+                ->where('type', 'jobs')
+                ->where('name', 'App\\Jobs\\Import/Orders')
+                ->where('preview.data.0.throughput', 19));
+    });
+
     it('rejects metric types outside the route constraint', function (): void {
         get('/horizon/metrics/workers')->assertNotFound();
     });

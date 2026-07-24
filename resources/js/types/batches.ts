@@ -9,6 +9,12 @@ export type BatchClearCounts = Record<BatchClearScope, number> & {
   available: boolean;
 };
 
+export type BatchFilterCatalog = {
+  available: boolean;
+  queues: string[];
+  connections: string[];
+};
+
 export type BatchFilterValues = {
   queue: string | null;
   connection: string | null;
@@ -60,6 +66,7 @@ export type BatchesPageProps = {
   query: string;
   filters?: BatchFilterValues;
   batchClearCounts?: BatchClearCounts;
+  batchFilterCatalog?: BatchFilterCatalog;
   batches: {
     data: BatchRow[];
     available: boolean;

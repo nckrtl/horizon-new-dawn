@@ -202,7 +202,8 @@ describe('failed job pages', function (): void {
         Bus::fake();
 
         $repository = mockDashboardContract(JobRepository::class);
-        dashboardReturns($repository, 'getFailed', new Collection([
+        dashboardReturnsFor($repository, 'countFailed', [], 2);
+        dashboardReturnsFor($repository, 'getFailed', ['-1'], new Collection([
             horizonJob(0, 'failed-1'),
             horizonJob(1, 'failed-2'),
         ]));
@@ -231,7 +232,8 @@ describe('failed job pages', function (): void {
 
     it('clears every failed job from Horizon and Laravel storage', function (): void {
         $repository = mockDashboardContract(JobRepository::class);
-        dashboardReturns($repository, 'getFailed', new Collection([
+        dashboardReturnsFor($repository, 'countFailed', [], 2);
+        dashboardReturnsFor($repository, 'getFailed', ['-1'], new Collection([
             horizonJob(0, 'failed-1'),
             horizonJob(1, 'failed-2'),
         ]));

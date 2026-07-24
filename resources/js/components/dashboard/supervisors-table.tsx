@@ -42,7 +42,10 @@ import { isInteractiveTarget } from "@/lib/interactive-target";
 import { cn } from "@/lib/utils";
 import type {
   DashboardSupervisors,
+  HorizonDisplayStatus,
   HorizonStatus as HorizonStatusValue,
+  HorizonTransitionStatus,
+  ProcessTransitions,
   SupervisorItem,
 } from "@/types/dashboard";
 
@@ -55,6 +58,12 @@ const columns: SortColumn<SupervisorItem>[] = [
   { key: "balancing", value: (item) => item.balancing },
 ];
 const emptySupervisorRows: readonly SupervisorItem[] = [];
+const emptyProcessTransitions: ProcessTransitions = {
+  instances: {},
+  supervisors: {},
+};
+const acceptTransition = () => 0;
+const ignoreTransitionFailure = () => undefined;
 
 function directionFor(key: string, sort: { key: string; direction: "asc" | "desc" } | null) {
   return sort?.key === key ? sort.direction : undefined;
@@ -65,18 +74,34 @@ function HorizonInstance({
   group,
   hasMoreThanTwoInstances,
   horizonBaseUrl,
+  onInstanceTransition,
+  onInstanceTransitionFailure,
+  onSupervisorTransition,
+  onSupervisorTransitionFailure,
   sort,
+  transitions,
   onSort,
 }: {
   autoRefreshEnabled: boolean;
   group: DashboardSupervisors["groups"][number];
   hasMoreThanTwoInstances: boolean;
   horizonBaseUrl: string;
+  onInstanceTransition: (instance: string, transition: HorizonTransitionStatus) => number | null;
+  onInstanceTransitionFailure: (instance: string, token: number) => void;
+  onSupervisorTransition: (
+    supervisor: string,
+    transition: HorizonTransitionStatus,
+  ) => number | null;
+  onSupervisorTransitionFailure: (supervisor: string, token: number) => void;
   sort: SortState | null;
+  transitions: ProcessTransitions;
   onSort: (key: string) => void;
 }) {
   const rows = sortRows(group.items, columns, sort);
-  const status = normalizeStatus(group.status);
+  const status = displayStatus(group.status, transitions.instances[group.name]);
+  const hasPendingSupervisorTransition = group.items.some(
+    (item) => transitions.supervisors[item.id] !== undefined,
+  );
 
   return (
     <section aria-labelledby={`horizon-instance-${group.name}`}>
@@ -107,7 +132,12 @@ function HorizonInstance({
             <HorizonInstanceActions
               horizonBaseUrl={horizonBaseUrl}
               instanceName={group.name}
+              onTransition={(transition) => onInstanceTransition(group.name, transition)}
+              onTransitionFailure={(token) => onInstanceTransitionFailure(group.name, token)}
               status={status}
+              transitionPending={
+                transitions.instances[group.name] !== undefined || hasPendingSupervisorTransition
+              }
             />
           ) : null}
         </div>
@@ -145,7 +175,11 @@ function HorizonInstance({
             />
           ) : null}
           {rows.map((item) => {
-            const scaling = autoRefreshEnabled ? item.scaling : null;
+            const status = displayStatus(
+              item.status,
+              transitions.supervisors[item.id] ?? transitions.instances[group.name],
+            );
+            const scaling = autoRefreshEnabled && status === "running" ? item.scaling : null;
             const detailUrl = resolveHorizonRoute(
               supervisorShow(encodeURIComponent(item.id)),
               horizonBaseUrl,
@@ -169,7 +203,7 @@ function HorizonInstance({
                   </Link>
                 </TableCell>
                 <TableCell className="px-6">
-                  <StatusBadge status={normalizeStatus(item.status)} />
+                  <StatusBadge status={status} />
                 </TableCell>
                 <TableCell tone="secondary" className="px-6">
                   {item.connection}
@@ -195,8 +229,14 @@ function HorizonInstance({
                   <TableCell className="px-6 text-right">
                     <SupervisorActions
                       horizonBaseUrl={horizonBaseUrl}
+                      onTransition={(transition) => onSupervisorTransition(item.id, transition)}
+                      onTransitionFailure={(token) => onSupervisorTransitionFailure(item.id, token)}
                       supervisor={item.id}
-                      status={normalizeStatus(item.status)}
+                      status={status}
+                      transitionPending={
+                        transitions.instances[group.name] !== undefined ||
+                        transitions.supervisors[item.id] !== undefined
+                      }
                     />
                   </TableCell>
                 ) : null}
@@ -352,10 +392,23 @@ export function SupervisorsTable({
   autoRefreshEnabled,
   supervisors,
   horizonBaseUrl,
+  transitions = emptyProcessTransitions,
+  onInstanceTransition = acceptTransition,
+  onInstanceTransitionFailure = ignoreTransitionFailure,
+  onSupervisorTransition = acceptTransition,
+  onSupervisorTransitionFailure = ignoreTransitionFailure,
 }: {
   autoRefreshEnabled: boolean;
   supervisors: DashboardSupervisors;
   horizonBaseUrl: string;
+  transitions?: ProcessTransitions;
+  onInstanceTransition?: (instance: string, transition: HorizonTransitionStatus) => number | null;
+  onInstanceTransitionFailure?: (instance: string, token: number) => void;
+  onSupervisorTransition?: (
+    supervisor: string,
+    transition: HorizonTransitionStatus,
+  ) => number | null;
+  onSupervisorTransitionFailure?: (supervisor: string, token: number) => void;
 }) {
   const sorting = useSortableRows(emptySupervisorRows, columns, {
     persist: true,
@@ -436,6 +489,11 @@ export function SupervisorsTable({
               group={group}
               hasMoreThanTwoInstances={supervisors.groups.length > 2}
               horizonBaseUrl={horizonBaseUrl}
+              transitions={transitions}
+              onInstanceTransition={onInstanceTransition}
+              onInstanceTransitionFailure={onInstanceTransitionFailure}
+              onSupervisorTransition={onSupervisorTransition}
+              onSupervisorTransitionFailure={onSupervisorTransitionFailure}
               sort={sorting.sort}
               onSort={sorting.toggle}
               key={group.name}
@@ -460,4 +518,20 @@ function normalizeStatus(status: string): HorizonStatusValue {
   return status === "running" || status === "paused" || status === "unavailable"
     ? status
     : "inactive";
+}
+
+function displayStatus(
+  status: string,
+  transition: HorizonTransitionStatus | undefined,
+): HorizonDisplayStatus {
+  const currentStatus = normalizeStatus(status);
+
+  if (
+    (transition === "pausing" && currentStatus === "running") ||
+    (transition === "continuing" && currentStatus === "paused")
+  ) {
+    return transition;
+  }
+
+  return currentStatus;
 }

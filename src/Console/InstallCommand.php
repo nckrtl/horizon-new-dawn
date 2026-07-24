@@ -7,6 +7,7 @@ namespace NckRtl\HorizonNewDawn\Console;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
+use JsonException;
 use NckRtl\HorizonNewDawn\Assets\AssetPath;
 use RuntimeException;
 
@@ -63,7 +64,7 @@ final class InstallCommand extends Command
         string $destination,
         bool $force,
     ): void {
-        if ($filesystem->isDirectory($destination) && ! $force) {
+        if (! $force && $this->hasCompletePublishedAssets($filesystem, $destination)) {
             return;
         }
 
@@ -95,6 +96,113 @@ final class InstallCommand extends Command
                 $filesystem->deleteDirectory($stagingDirectory);
             }
         }
+    }
+
+    private function hasCompletePublishedAssets(Filesystem $filesystem, string $destination): bool
+    {
+        if (! $filesystem->isDirectory($destination)) {
+            return false;
+        }
+
+        if (! $filesystem->isFile($destination.'/favicon.svg')) {
+            return false;
+        }
+
+        $manifestPath = $destination.'/.vite/manifest.json';
+
+        if (! $filesystem->isFile($manifestPath)) {
+            return false;
+        }
+
+        try {
+            $manifest = json_decode($filesystem->get($manifestPath), true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return false;
+        }
+
+        if (! is_array($manifest) || array_is_list($manifest) || ! array_key_exists('resources/js/app.tsx', $manifest)) {
+            return false;
+        }
+
+        foreach ($manifest as $key => $entry) {
+            if (! is_string($key) || ! is_array($entry)) {
+                return false;
+            }
+
+            if (! $this->publishedAssetExists($filesystem, $destination, $entry['file'] ?? null)) {
+                return false;
+            }
+
+            foreach (['css', 'assets'] as $collection) {
+                $paths = $entry[$collection] ?? [];
+
+                if (! is_array($paths)) {
+                    return false;
+                }
+
+                foreach ($paths as $path) {
+                    if (! $this->publishedAssetExists($filesystem, $destination, $path)) {
+                        return false;
+                    }
+                }
+            }
+
+            foreach (['imports', 'dynamicImports'] as $collection) {
+                $imports = $entry[$collection] ?? [];
+
+                if (! is_array($imports)) {
+                    return false;
+                }
+
+                foreach ($imports as $import) {
+                    if (! is_string($import) || ! array_key_exists($import, $manifest)) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private function publishedAssetExists(Filesystem $filesystem, string $destination, mixed $path): bool
+    {
+        if (! is_string($path)) {
+            return false;
+        }
+
+        $relativePath = $this->normalizeRelativeAssetPath($path);
+
+        if ($relativePath === null) {
+            return false;
+        }
+
+        return $filesystem->isFile($destination.'/'.$relativePath);
+    }
+
+    private function normalizeRelativeAssetPath(string $path): ?string
+    {
+        $normalized = str_replace('\\', '/', trim($path));
+
+        if ($normalized === '' || Str::startsWith($normalized, ['/']) || preg_match('/^[A-Za-z]:\//', $normalized) === 1) {
+            return null;
+        }
+
+        $segments = [];
+
+        foreach (explode('/', $normalized) as $segment) {
+            if ($segment === '' || $segment === '.') {
+                return null;
+            }
+
+            if ($segment === '..') {
+                return null;
+            }
+
+            $segments[] = $segment;
+        }
+
+        return implode('/', $segments);
     }
 
     private function mergeStagedAssets(

@@ -30,8 +30,9 @@ final readonly class BatchRepositoryOverview
      */
     public function get(): array
     {
-        $cacheSeconds = (int) ceil(
-            max(0, (int) config('horizon-new-dawn.poll_interval', 0)) / 1000,
+        $cacheSeconds = intdiv(
+            max(0, (int) config('horizon-new-dawn.poll_interval', 0)),
+            1000,
         );
 
         if ($cacheSeconds === 0) {

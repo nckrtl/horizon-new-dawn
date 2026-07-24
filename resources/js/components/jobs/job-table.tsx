@@ -1,10 +1,11 @@
 import { Link, router } from "@inertiajs/react";
 import { TriangleAlertIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, type Ref } from "react";
 
 import { SortableTableHead } from "@/components/data-table/sortable-table-head";
 import { NewEntriesTableRow, TableNoticeRow } from "@/components/data-table/new-entries-alert";
 import { TableEmpty } from "@/components/data-table/table-empty";
+import { Duration } from "@/components/duration";
 import { JobTablePrimaryCell } from "@/components/jobs/job-table-primary-cell";
 import { PendingJobActionsMenu } from "@/components/jobs/pending-job-actions";
 import {
@@ -98,6 +99,9 @@ export function JobTable({
   onLoadNewEntries,
   emptyTitle,
   emptyDescription,
+  visibleJobIds,
+  onSortedChange,
+  bodyRef,
 }: {
   jobs: readonly JobRow[];
   type: JobListType;
@@ -109,6 +113,9 @@ export function JobTable({
   onLoadNewEntries?: () => void;
   emptyTitle?: string;
   emptyDescription?: string;
+  visibleJobIds?: ReadonlySet<string>;
+  onSortedChange?: (sorted: boolean) => void;
+  bodyRef?: Ref<HTMLTableSectionElement>;
 }) {
   const now = useScheduledJobClock(jobs);
   const columns = useMemo<SortColumn<JobRow>[]>(
@@ -123,6 +130,22 @@ export function JobTable({
   );
   const sorted = useSortableRows(jobs, columns, { persist: true });
   const compact = type === "pending";
+  const isSorted = sorted.sort !== null;
+  const hasVisibleJobs =
+    visibleJobIds === undefined
+      ? sorted.rows.length > 0
+      : sorted.rows.some((job) => visibleJobIds.has(job.id));
+  const renderedRows =
+    visibleJobIds === undefined
+      ? sorted.rows
+      : [
+          ...sorted.rows.filter((job) => visibleJobIds.has(job.id)),
+          ...sorted.rows.filter((job) => !visibleJobIds.has(job.id)),
+        ];
+
+  useEffect(() => {
+    onSortedChange?.(isSorted);
+  }, [isSorted, onSortedChange]);
 
   if (!available) {
     return (
@@ -182,14 +205,12 @@ export function JobTable({
           {compact ? <TableHead className="w-[72px] px-6 text-right">Actions</TableHead> : null}
         </TableRow>
       </TableHeader>
-      <TableBody>
+      <TableBody role="presentation">
         {hasNewEntries && onLoadNewEntries ? (
           <NewEntriesTableRow columns={4} onLoad={onLoadNewEntries} />
         ) : null}
-        {notice && sorted.rows.length > 0 ? (
-          <TableNoticeRow columns={4}>{notice}</TableNoticeRow>
-        ) : null}
-        {sorted.rows.length === 0 ? (
+        {notice && hasVisibleJobs ? <TableNoticeRow columns={4}>{notice}</TableNoticeRow> : null}
+        {!hasVisibleJobs ? (
           <TableEmpty
             columns={4}
             title={emptyTitle ?? `No ${type} jobs`}
@@ -197,7 +218,9 @@ export function JobTable({
             icon={emptyStateIcons[type]}
           />
         ) : null}
-        {sorted.rows.map((job) => {
+      </TableBody>
+      <TableBody ref={bodyRef}>
+        {renderedRows.map((job) => {
           const detailUrl = resolveHorizonRoute(jobShow({ type, job: job.id }), horizonBaseUrl).url;
           const retryOfUrl = job.retryOf
             ? resolveHorizonRoute(failedJobShow(job.retryOf), horizonBaseUrl).url
@@ -209,6 +232,7 @@ export function JobTable({
             <TableRow
               className="cursor-pointer"
               key={job.id}
+              hidden={visibleJobIds !== undefined && !visibleJobIds.has(job.id)}
               onClick={(event) => {
                 if (isInteractiveTarget(event.target)) {
                   return;
@@ -270,7 +294,7 @@ export function JobTable({
               ) : null}
               {!compact ? (
                 <TableCell className="px-6 text-right tabular-nums text-muted-foreground">
-                  {job.runtime === null ? "—" : `${job.runtime.toFixed(2)}s`}
+                  {job.runtime === null ? "—" : <Duration seconds={job.runtime} format="precise" />}
                 </TableCell>
               ) : null}
             </TableRow>

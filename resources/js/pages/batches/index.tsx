@@ -1,6 +1,6 @@
-import { Head, InfiniteScroll, router } from "@inertiajs/react";
+import { Head, InfiniteScroll, router, usePage } from "@inertiajs/react";
 import { SearchIcon, XIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { BatchTable } from "@/components/batches/batch-table";
 import { BatchFilters } from "@/components/batches/batch-filters";
@@ -21,9 +21,10 @@ import { index as batchesIndex } from "@/generated/routes/horizon-new-dawn/batch
 import { useAutoLoad } from "@/hooks/use-auto-load";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
-import { urlWithCurrentQuery } from "@/lib/url-query";
+import { currentQueryParameter, replaceCurrentQuery, urlWithCurrentQuery } from "@/lib/url-query";
 import type {
   BatchClearCounts,
+  BatchFilterCatalog,
   BatchFilterValues,
   BatchesPageProps,
   BatchStatus,
@@ -47,7 +48,12 @@ const emptyBatchClearCounts: BatchClearCounts = {
   cancelled: 0,
   available: false,
 };
-const batchRefreshProps = ["batchClearCounts"];
+const emptyBatchFilterCatalog: BatchFilterCatalog = {
+  available: false,
+  queues: [],
+  connections: [],
+};
+const batchRefreshProps = ["batchClearCounts", "batchFilterCatalog"];
 
 function BatchesIndex({
   horizon,
@@ -55,21 +61,13 @@ function BatchesIndex({
   filters = emptyBatchFilters,
   batches,
   batchClearCounts = emptyBatchClearCounts,
+  batchFilterCatalog = emptyBatchFilterCatalog,
 }: BatchesPageProps) {
+  const page = usePage();
   const [search, setSearch] = useState(query);
   const [activeTab, setActiveTab] = useState<BatchTab>("all");
-  const [knownQueues, setKnownQueues] = useState<string[]>(() =>
-    batchFilterOptions(
-      batches.data.map((batch) => batch.queue ?? null),
-      filters.queue,
-    ),
-  );
-  const [knownConnections, setKnownConnections] = useState<string[]>(() =>
-    batchFilterOptions(
-      batches.data.map((batch) => batch.connection ?? null),
-      filters.connection,
-    ),
-  );
+  const [hasClientSort, setHasClientSort] = useState(() => currentQueryParameter("sort") !== null);
+  const batchItemsRef = useRef<HTMLTableSectionElement>(null);
   const { autoLoad } = useAutoLoadPreference();
   const filterScope = `${query}:${filters.queue ?? ""}:${filters.connection ?? ""}:${filters.created ?? ""}`;
   const refreshedBatches = useAutoLoad({
@@ -97,28 +95,37 @@ function BatchesIndex({
 
     return counts;
   }, [refreshedBatches.items]);
-  const visibleBatches = useMemo(
+  const visibleBatchIds = useMemo(
     () =>
       activeTab === "all"
-        ? refreshedBatches.items
-        : refreshedBatches.items.filter((batch) => batch.status === activeTab),
+        ? undefined
+        : new Set(
+            refreshedBatches.items
+              .filter((batch) => batch.status === activeTab)
+              .map((batch) => batch.id),
+          ),
     [activeTab, refreshedBatches.items],
+  );
+  const queueOptions = useMemo(
+    () => batchFilterOptions(batchFilterCatalog.queues, filters.queue),
+    [batchFilterCatalog.queues, filters.queue],
+  );
+  const connectionOptions = useMemo(
+    () => batchFilterOptions(batchFilterCatalog.connections, filters.connection),
+    [batchFilterCatalog.connections, filters.connection],
   );
 
   useEffect(() => {
-    setKnownQueues((current) =>
-      batchFilterOptions(
-        [...current, ...refreshedBatches.items.map((batch) => batch.queue ?? null)],
-        filters.queue,
-      ),
-    );
-    setKnownConnections((current) =>
-      batchFilterOptions(
-        [...current, ...refreshedBatches.items.map((batch) => batch.connection ?? null)],
-        filters.connection,
-      ),
-    );
-  }, [filters.connection, filters.queue, refreshedBatches.items]);
+    if (
+      !hasClientSort ||
+      currentQueryParameter("sort") === null ||
+      currentQueryParameter("before_id") === null
+    ) {
+      return;
+    }
+
+    replaceCurrentQuery({ before_id: null });
+  }, [hasClientSort, page.url]);
 
   useEffect(() => {
     const value = search.trim();
@@ -135,7 +142,14 @@ function BatchesIndex({
         url,
         {},
         {
-          only: ["query", "filters", "batchClearCounts", "batches", "horizon"],
+          only: [
+            "query",
+            "filters",
+            "batchClearCounts",
+            "batchFilterCatalog",
+            "batches",
+            "horizon",
+          ],
           preserveScroll: true,
           preserveState: true,
           replace: true,
@@ -163,7 +177,7 @@ function BatchesIndex({
       url,
       {},
       {
-        only: ["filters", "batchClearCounts", "batches", "horizon"],
+        only: ["filters", "batchClearCounts", "batchFilterCatalog", "batches", "horizon"],
         preserveScroll: true,
         preserveState: true,
         replace: true,
@@ -237,8 +251,8 @@ function BatchesIndex({
                 </InputGroup>
               </Field>
               <BatchFilters
-                queues={knownQueues}
-                connections={knownConnections}
+                queues={queueOptions}
+                connections={connectionOptions}
                 values={filters}
                 onChange={updateFilters}
               />
@@ -248,9 +262,17 @@ function BatchesIndex({
               {batchTabs.find((tab) => tab.value === activeTab)?.label} batches
             </h2>
             <TabsContent value={activeTab}>
-              <InfiniteScroll data="batches" onlyNext buffer={600} loading={<LoadingRows />}>
+              <InfiniteScroll
+                key={`${filterScope}:${batches.available}`}
+                data="batches"
+                itemsElement={batchItemsRef}
+                onlyNext
+                preserveUrl={hasClientSort}
+                buffer={600}
+                loading={<LoadingRows />}
+              >
                 <BatchTable
-                  batches={visibleBatches}
+                  batches={refreshedBatches.items}
                   horizonBaseUrl={horizon.baseUrl}
                   available={batches.available}
                   message={batches.message}
@@ -261,6 +283,9 @@ function BatchesIndex({
                     activeTab === "all" ? undefined : "No loaded batches match the selected status."
                   }
                   showBatchActions
+                  visibleBatchIds={visibleBatchIds}
+                  onSortedChange={setHasClientSort}
+                  bodyRef={batchItemsRef}
                 />
               </InfiniteScroll>
             </TabsContent>
@@ -271,12 +296,12 @@ function BatchesIndex({
   );
 }
 
-function batchFilterOptions(values: Array<string | null>, active: string | null): string[] {
+function batchFilterOptions(values: readonly string[], active: string | null): string[] {
   const options = active === null ? values : [...values, active];
 
-  return Array.from(
-    new Set(options.filter((value): value is string => value !== null && value !== "")),
-  ).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+  return Array.from(new Set(options.filter((value): value is string => value !== ""))).sort(
+    (left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }),
+  );
 }
 
 function LoadingRows() {

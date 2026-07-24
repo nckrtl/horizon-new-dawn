@@ -13,12 +13,16 @@ use Illuminate\Queue\QueueManager;
 use Illuminate\Queue\RedisQueue;
 use Illuminate\Redis\Connections\Connection;
 use Illuminate\Support\Collection;
+use Laravel\Horizon\Contracts\HorizonCommandQueue;
 use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 use Laravel\Horizon\Contracts\MetricsRepository;
 use Laravel\Horizon\Contracts\SupervisorRepository;
 use Laravel\Horizon\Contracts\TagRepository;
 use Laravel\Horizon\Horizon;
+use Laravel\Horizon\MasterSupervisor;
+use Laravel\Horizon\SupervisorCommands\ContinueWorking;
+use Laravel\Horizon\SupervisorCommands\Pause;
 use Laravel\Horizon\WaitTimeCalculator;
 use NckRtl\HorizonNewDawn\Batches\BatchesData;
 use NckRtl\HorizonNewDawn\Batches\BatchJobsData;
@@ -253,6 +257,7 @@ function bindBrowserPageFixtures(): void
 function bindBrowserSupervisorScalingFixtures(): void
 {
     bindBrowserPageFixtures();
+    config()->set('horizon-new-dawn.poll_interval', 2000);
 
     $masters = mockDashboardContract(MasterSupervisorRepository::class);
     dashboardReturns($masters, 'all', [
@@ -280,6 +285,116 @@ function bindBrowserSupervisorScalingFixtures(): void
     $queues = mockDashboardContract(QueueFactory::class);
     dashboardReturns($queues, 'connection', $queue);
     app()->instance(QueueFactory::class, $queues);
+}
+
+function bindBrowserProcessTransitionFixtures(bool $supervisorPaused = true): string
+{
+    bindBrowserPageFixtures();
+    config()->set('horizon-new-dawn.poll_interval', 2000);
+
+    $instance = MasterSupervisor::basename().'-a1b2';
+    $supervisor = $instance.':supervisor-1';
+    $masterRecord = (object) [
+        'name' => $instance,
+        'environment' => 'testing',
+        'pid' => 1204,
+        'status' => 'running',
+    ];
+    $supervisorRecord = (object) [
+        'name' => $supervisor,
+        'master' => $instance,
+        'status' => $supervisorPaused ? 'paused' : 'running',
+        'processes' => ['redis:default' => 1],
+        'options' => [
+            'connection' => 'redis',
+            'queue' => 'default',
+            'balance' => 'auto',
+        ],
+    ];
+    $transitionState = new class
+    {
+        public ?string $pendingCommand = null;
+
+        public bool $holdPendingCommand = false;
+    };
+
+    $masters = mockDashboardContract(MasterSupervisorRepository::class);
+    dashboardReturnsUsing(
+        $masters,
+        'all',
+        static function () use (
+            $masterRecord,
+            $transitionState,
+        ): array {
+            $transitionState->holdPendingCommand = $transitionState->pendingCommand !== null;
+
+            return [clone $masterRecord];
+        },
+    );
+    dashboardReturns($masters, 'find', $masterRecord);
+    app()->instance(MasterSupervisorRepository::class, $masters);
+
+    $supervisors = mockDashboardContract(SupervisorRepository::class);
+    dashboardReturnsUsing(
+        $supervisors,
+        'all',
+        static function () use (
+            $masterRecord,
+            $supervisorRecord,
+            $transitionState,
+        ): array {
+            $record = clone $supervisorRecord;
+
+            if (
+                $transitionState->holdPendingCommand
+                && $transitionState->pendingCommand === 'pause'
+            ) {
+                $masterRecord->status = 'paused';
+                $supervisorRecord->status = 'paused';
+            } elseif (
+                $transitionState->holdPendingCommand
+                && $transitionState->pendingCommand === 'continue'
+            ) {
+                $supervisorRecord->status = 'running';
+            }
+
+            if ($transitionState->holdPendingCommand) {
+                $transitionState->holdPendingCommand = false;
+                $transitionState->pendingCommand = null;
+            }
+
+            return [$record];
+        },
+    );
+    dashboardReturns($supervisors, 'find', $supervisorRecord);
+    app()->instance(SupervisorRepository::class, $supervisors);
+
+    $commands = mockDashboardContract(HorizonCommandQueue::class);
+    dashboardReturnsUsing(
+        $commands,
+        'push',
+        static function (string $queue, string $command) use (
+            $instance,
+            $supervisor,
+            $transitionState,
+        ): void {
+            if (
+                $queue === MasterSupervisor::commandQueueFor($instance)
+                && $command === Pause::class
+            ) {
+                $transitionState->pendingCommand = 'pause';
+
+                return;
+            }
+
+            if ($queue === $supervisor && $command === ContinueWorking::class) {
+                $transitionState->pendingCommand = 'continue';
+            }
+        },
+    );
+    app()->instance(HorizonCommandQueue::class, $commands);
+
+    return $instance;
 }
 
 function browserScalingSupervisor(

@@ -63,6 +63,111 @@ describe("SupervisorsTable", () => {
     expect(rows[1]).toHaveTextContent("Paused");
   });
 
+  it("shows each supervisor's own convergence while a parent pause remains pending", () => {
+    render(
+      <SupervisorsTable
+        autoRefreshEnabled={false}
+        horizonBaseUrl="/horizon"
+        supervisors={{
+          available: true,
+          message: null,
+          groups: [
+            {
+              name: "horizon-web-01",
+              status: "paused",
+              local: true,
+              items: [
+                {
+                  id: "horizon-web-01:supervisor-paused",
+                  name: "supervisor-paused",
+                  connection: "redis",
+                  queues: ["default"],
+                  processes: 1,
+                  balancing: "Auto",
+                  status: "paused",
+                },
+                {
+                  id: "horizon-web-01:supervisor-lagging",
+                  name: "supervisor-lagging",
+                  connection: "redis",
+                  queues: ["mail"],
+                  processes: 1,
+                  balancing: "Auto",
+                  status: "running",
+                },
+              ],
+            },
+          ],
+        }}
+        transitions={{
+          instances: { "horizon-web-01": "pausing" },
+          supervisors: {},
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText("Paused")).toHaveLength(2);
+    expect(screen.getByText("Pausing")).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: "Supervisor horizon-web-01:supervisor-paused actions",
+      }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByRole("button", {
+        name: "Supervisor horizon-web-01:supervisor-lagging actions",
+      }),
+    ).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("blocks the parent action while a child transition remains pending", () => {
+    render(
+      <SupervisorsTable
+        autoRefreshEnabled={false}
+        horizonBaseUrl="/horizon"
+        supervisors={{
+          available: true,
+          message: null,
+          groups: [
+            {
+              name: "horizon-web-01",
+              status: "running",
+              local: true,
+              items: [
+                {
+                  id: "horizon-web-01:supervisor-paused",
+                  name: "supervisor-paused",
+                  connection: "redis",
+                  queues: ["default"],
+                  processes: 1,
+                  balancing: "Auto",
+                  status: "paused",
+                },
+              ],
+            },
+          ],
+        }}
+        transitions={{
+          instances: {},
+          supervisors: {
+            "horizon-web-01:supervisor-paused": "continuing",
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Horizon instance horizon-web-01 actions",
+      }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByRole("button", {
+        name: "Supervisor horizon-web-01:supervisor-paused actions",
+      }),
+    ).toHaveAttribute("aria-disabled", "true");
+  });
+
   it("uses the Dashboard navigation icon for an empty supervisor group", () => {
     render(
       <SupervisorsTable

@@ -1,5 +1,5 @@
-import { Head, InfiniteScroll, router } from "@inertiajs/react";
-import { useEffect, useState } from "react";
+import { Head, InfiniteScroll, router, usePage } from "@inertiajs/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { FailedJobsActionsMenu } from "@/components/jobs/failed-job-actions";
 import { FailedJobTable } from "@/components/jobs/failed-job-table";
@@ -11,11 +11,14 @@ import { useAutoLoad } from "@/hooks/use-auto-load";
 import { useJobFilters } from "@/hooks/use-job-filters";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
-import { urlWithCurrentQuery } from "@/lib/url-query";
+import { currentQueryParameter, replaceCurrentQuery, urlWithCurrentQuery } from "@/lib/url-query";
 import type { FailedJobsPageProps } from "@/types/jobs";
 
 function FailedJobsIndex({ horizon, query, jobs }: FailedJobsPageProps) {
+  const page = usePage();
   const [search, setSearch] = useState(query);
+  const [hasClientSort, setHasClientSort] = useState(() => currentQueryParameter("sort") !== null);
+  const jobItemsRef = useRef<HTMLTableSectionElement>(null);
   const { autoLoad } = useAutoLoadPreference();
   const refreshedJobs = useAutoLoad({
     enabled: autoLoad,
@@ -26,6 +29,10 @@ function FailedJobsIndex({ horizon, query, jobs }: FailedJobsPageProps) {
     scope: query,
   });
   const jobFilters = useJobFilters("failed", refreshedJobs.items);
+  const visibleJobIds = useMemo(
+    () => new Set(jobFilters.filteredJobs.map((job) => job.id)),
+    [jobFilters.filteredJobs],
+  );
   const hasSearch = query !== "";
   const hasFilters = jobFilters.activeFilterCount > 0;
   let emptyDescription: string | undefined;
@@ -37,6 +44,18 @@ function FailedJobsIndex({ horizon, query, jobs }: FailedJobsPageProps) {
   } else if (hasFilters) {
     emptyDescription = "No loaded failed jobs match the current filters.";
   }
+
+  useEffect(() => {
+    if (
+      !hasClientSort ||
+      currentQueryParameter("sort") === null ||
+      currentQueryParameter("starting_at") === null
+    ) {
+      return;
+    }
+
+    replaceCurrentQuery({ starting_at: null });
+  }, [hasClientSort, page.url]);
 
   useEffect(() => {
     const value = search.trim();
@@ -81,6 +100,7 @@ function FailedJobsIndex({ horizon, query, jobs }: FailedJobsPageProps) {
             filterKeys={jobFilters.availableFilterKeys}
             values={jobFilters.values}
             onFilterChange={jobFilters.setFilterValue}
+            onClearFilters={jobFilters.clearAllFilters}
             description="Narrow the loaded failed jobs using filters available for this tab."
           />
         }
@@ -92,9 +112,17 @@ function FailedJobsIndex({ horizon, query, jobs }: FailedJobsPageProps) {
           />
         }
       >
-        <InfiniteScroll data="jobs" onlyNext buffer={600} loading={<LoadingRows />}>
+        <InfiniteScroll
+          key={`${query}:${jobs.available}`}
+          data="jobs"
+          itemsElement={jobItemsRef}
+          onlyNext
+          preserveUrl={hasClientSort}
+          buffer={600}
+          loading={<LoadingRows />}
+        >
           <FailedJobTable
-            jobs={jobFilters.filteredJobs}
+            jobs={refreshedJobs.items}
             horizonBaseUrl={horizon.baseUrl}
             available={jobs.available}
             message={jobs.message}
@@ -102,6 +130,9 @@ function FailedJobsIndex({ horizon, query, jobs }: FailedJobsPageProps) {
             onLoadNewEntries={refreshedJobs.loadNewEntries}
             emptyTitle={hasSearch || hasFilters ? "No matching failed jobs" : undefined}
             emptyDescription={emptyDescription}
+            visibleJobIds={visibleJobIds}
+            onSortedChange={setHasClientSort}
+            bodyRef={jobItemsRef}
           />
         </InfiniteScroll>
       </JobsPage>

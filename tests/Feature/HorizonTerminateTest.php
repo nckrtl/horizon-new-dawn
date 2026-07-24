@@ -240,6 +240,48 @@ it('queues continue for the exact active supervisor', function (): void {
         ->assertJsonPath('message', 'Supervisor continue requested.');
 });
 
+it('queues pause for a slash-bearing supervisor name without consuming the pause suffix', function (): void {
+    $supervisors = bindProcessSupervisorRepository();
+    dashboardReturnsFor(
+        $supervisors,
+        'find',
+        ['local-host-a1b2:imports/worker'],
+        (object) ['name' => 'local-host-a1b2:imports/worker'],
+    );
+    $commands = bindProcessCommandQueue();
+    dashboardReturnsFor(
+        $commands,
+        'push',
+        ['local-host-a1b2:imports/worker', Pause::class, []],
+        null,
+    );
+
+    postJson('/horizon/supervisors/local-host-a1b2%3Aimports%2Fworker/pause')
+        ->assertAccepted()
+        ->assertJsonPath('message', 'Supervisor pause requested.');
+});
+
+it('queues continue for a slash-bearing supervisor name without consuming the pause suffix', function (): void {
+    $supervisors = bindProcessSupervisorRepository();
+    dashboardReturnsFor(
+        $supervisors,
+        'find',
+        ['local-host-a1b2:imports/worker'],
+        (object) ['name' => 'local-host-a1b2:imports/worker'],
+    );
+    $commands = bindProcessCommandQueue();
+    dashboardReturnsFor(
+        $commands,
+        'push',
+        ['local-host-a1b2:imports/worker', ContinueWorking::class, []],
+        null,
+    );
+
+    deleteJson('/horizon/supervisors/local-host-a1b2%3Aimports%2Fworker/pause')
+        ->assertAccepted()
+        ->assertJsonPath('message', 'Supervisor continue requested.');
+});
+
 it('rejects a missing supervisor', function (): void {
     $supervisors = bindProcessSupervisorRepository();
     dashboardReturnsFor($supervisors, 'find', ['missing-supervisor'], null);

@@ -3,6 +3,7 @@ import { Head } from "@inertiajs/react";
 import { DashboardOverview } from "@/components/dashboard/dashboard-overview";
 import { SupervisorsTable } from "@/components/dashboard/supervisors-table";
 import { WorkloadTable } from "@/components/dashboard/workload-table";
+import { Duration } from "@/components/duration";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   index as batchesIndex,
@@ -11,16 +12,29 @@ import {
 import { index as failedJobsIndex } from "@/generated/routes/horizon-new-dawn/failed-jobs";
 import { index as jobsIndex } from "@/generated/routes/horizon-new-dawn/jobs";
 import { useDashboardRefresh } from "@/hooks/use-dashboard-refresh";
+import { resolveProcessPollInterval, useProcessTransitions } from "@/hooks/use-process-transitions";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
-import { formatDuration } from "@/lib/format-duration";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import type { DashboardPageProps } from "@/types/dashboard";
 
 function Dashboard({ horizon, summary, workload, supervisors }: DashboardPageProps) {
   const { autoLoad } = useAutoLoadPreference();
+  const {
+    hasPendingTransitions,
+    onInstanceTransition,
+    onInstanceTransitionFailure,
+    onSupervisorTransition,
+    onSupervisorTransitionFailure,
+    transitions,
+  } = useProcessTransitions(supervisors, horizon.pollInterval);
+  const autoRefreshEnabled = autoLoad && horizon.pollInterval > 0;
+  const fallbackPolling = !autoRefreshEnabled && hasPendingTransitions;
   const hasWorkload = workload.available && workload.items.length > 0;
 
-  useDashboardRefresh(horizon.pollInterval, autoLoad);
+  useDashboardRefresh(
+    resolveProcessPollInterval(horizon.pollInterval),
+    autoRefreshEnabled || fallbackPolling,
+  );
 
   const route = (definition: { url: string }) =>
     resolveHorizonRoute(definition, horizon.baseUrl).url;
@@ -50,7 +64,7 @@ function Dashboard({ horizon, summary, workload, supervisors }: DashboardPagePro
                 <WorkloadStat label="Total Processes" value={summary.processes} />
                 <WorkloadStat
                   label="Max Wait Time"
-                  value={formatDuration(summary.maxWaitSeconds)}
+                  value={<Duration seconds={summary.maxWaitSeconds} />}
                   detail={summary.maxWaitQueue}
                 />
                 <WorkloadStat label="Max Runtime" value={summary.queueWithMaxRuntime ?? "—"} />
@@ -70,9 +84,14 @@ function Dashboard({ horizon, summary, workload, supervisors }: DashboardPagePro
 
         {supervisors ? (
           <SupervisorsTable
-            autoRefreshEnabled={autoLoad}
+            autoRefreshEnabled={autoRefreshEnabled}
             supervisors={supervisors}
             horizonBaseUrl={horizon.baseUrl}
+            transitions={transitions}
+            onInstanceTransition={onInstanceTransition}
+            onInstanceTransitionFailure={onInstanceTransitionFailure}
+            onSupervisorTransition={onSupervisorTransition}
+            onSupervisorTransitionFailure={onSupervisorTransitionFailure}
           />
         ) : null}
       </div>
@@ -86,7 +105,7 @@ function WorkloadStat({
   detail,
 }: {
   label: string;
-  value: string | number;
+  value: React.ReactNode;
   detail?: string | null;
 }) {
   return (

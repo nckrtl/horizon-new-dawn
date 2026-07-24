@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Bus\BatchRepository;
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Collection;
@@ -14,6 +15,7 @@ use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 use Laravel\Horizon\Horizon;
 use Laravel\Horizon\Jobs\RetryFailedJob as HorizonRetryFailedJob;
 use NckRtl\HorizonNewDawn\Batches\BatchesData;
+use NckRtl\HorizonNewDawn\Batches\BatchFilterCatalog;
 use NckRtl\HorizonNewDawn\Batches\BatchJobsData;
 use NckRtl\HorizonNewDawn\Jobs\JobsData;
 use NckRtl\HorizonNewDawn\Support\HorizonRuntime;
@@ -53,6 +55,8 @@ describe('batch pages', function (): void {
         $batches = mockDashboardContract(BatchRepository::class);
         dashboardReturnsFor($batches, 'get', [50, null], [$batch]);
         dashboardReturnsFor($batches, 'get', [49, 'batch-1'], []);
+        dashboardReturnsFor($batches, 'get', [100, null], [$batch]);
+        dashboardReturnsFor($batches, 'get', [100, 'batch-1'], []);
         dashboardReturnsFor($batches, 'find', ['batch-1'], $batch);
         $jobs = mockDashboardContract(JobRepository::class);
         dashboardReturnsFor($jobs, 'getPending', [null], new Collection([
@@ -70,6 +74,11 @@ describe('batch pages', function (): void {
             $batches,
             new BatchJobsData($jobs, new JobsData($jobs)),
         ));
+        app()->instance(BatchFilterCatalog::class, new BatchFilterCatalog(
+            $batches,
+            app(BatchesData::class),
+            app(CacheFactory::class),
+        ));
 
         get('/horizon/batches')
             ->assertOk()
@@ -78,6 +87,9 @@ describe('batch pages', function (): void {
                 ->where('meta.title', 'Batches')
                 ->where('meta.activeNavigation', 'batches')
                 ->where('query', '')
+                ->where('batchFilterCatalog.available', true)
+                ->where('batchFilterCatalog.queues', ['imports'])
+                ->where('batchFilterCatalog.connections', ['redis'])
                 ->where('batches.data.0.id', 'batch-1')
                 ->where('batches.data.0.progress', 60));
 
@@ -103,6 +115,11 @@ describe('batch pages', function (): void {
             $batches,
             new BatchJobsData($jobs, new JobsData($jobs)),
         ));
+        app()->instance(BatchFilterCatalog::class, new BatchFilterCatalog(
+            $batches,
+            app(BatchesData::class),
+            app(CacheFactory::class),
+        ));
 
         get('/horizon/batches/missing')->assertNotFound();
     });
@@ -119,6 +136,11 @@ describe('batch pages', function (): void {
         app()->instance(BatchesData::class, new BatchesData(
             $batches,
             new BatchJobsData($jobs, new JobsData($jobs)),
+        ));
+        app()->instance(BatchFilterCatalog::class, new BatchFilterCatalog(
+            $batches,
+            app(BatchesData::class),
+            app(CacheFactory::class),
         ));
 
         get('/horizon/batches?queue=imports&connection=redis&created=day')

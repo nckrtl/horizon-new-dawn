@@ -3,6 +3,7 @@ import { TriangleAlertIcon } from "lucide-react";
 
 import { SortableTableHead } from "@/components/data-table/sortable-table-head";
 import { TableEmpty } from "@/components/data-table/table-empty";
+import { Duration } from "@/components/duration";
 import { QueueNavigationIcon } from "@/components/navigation-icons";
 import { QueueActionsMenu, QueuePauseBadge } from "@/components/queues/queue-actions-menu";
 import {
@@ -20,7 +21,6 @@ import {
 } from "@/components/ui/table";
 import { show as queueShow } from "@/generated/routes/horizon-new-dawn/queues";
 import { useSortableRows, type SortColumn } from "@/hooks/use-sortable-rows";
-import { formatDuration } from "@/lib/format-duration";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { isInteractiveTarget } from "@/lib/interactive-target";
 import type { QueueList, QueueRow } from "@/types/queues";
@@ -181,7 +181,7 @@ export function QueueTable({
                 {numberFormatter.format(queue.processes)}
               </TableCell>
               <TableCell className="px-6 text-right tabular-nums text-muted-foreground">
-                {formatDuration(queue.wait)}
+                <Duration seconds={queue.wait} />
               </TableCell>
               <TableCell className="pr-3 pl-6 text-right">
                 <QueueActionsMenu

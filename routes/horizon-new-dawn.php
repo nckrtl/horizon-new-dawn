@@ -41,10 +41,14 @@ Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
 Route::get('/instances', [RunningInstanceController::class, 'index'])->name('instances.index');
 Route::post('/supervisors/{supervisor}/pause', [SupervisorPauseController::class, 'store'])
+    ->where('supervisor', '.+?')
     ->name('supervisors.pause.store');
 Route::delete('/supervisors/{supervisor}/pause', [SupervisorPauseController::class, 'destroy'])
+    ->where('supervisor', '.+?')
     ->name('supervisors.pause.destroy');
-Route::get('/supervisors/{supervisor}', [SupervisorController::class, 'show'])->name('supervisors.show');
+Route::get('/supervisors/{supervisor}', [SupervisorController::class, 'show'])
+    ->where('supervisor', '.+')
+    ->name('supervisors.show');
 Route::post('/instances/terminate', [HorizonTerminationController::class, 'store'])
     ->name('instances.terminate.store');
 Route::post('/instances/{instance}/pause', [HorizonPauseController::class, 'store'])
@@ -74,6 +78,7 @@ Route::get('/metrics/{type}', [MetricsController::class, 'index'])
     ->name('metrics.index');
 Route::get('/metrics/{type}/{slug}', [MetricController::class, 'show'])
     ->where('type', 'jobs|queues')
+    ->where('slug', '.+')
     ->name('metrics.show');
 
 Route::get('/batches', [BatchController::class, 'index'])->name('batches.index');

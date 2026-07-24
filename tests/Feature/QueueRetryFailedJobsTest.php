@@ -10,7 +10,7 @@ use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Horizon;
 use Laravel\Horizon\Jobs\RetryFailedJob as HorizonRetryFailedJob;
 
-use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturns;
+use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsFor;
 use function NckRtl\HorizonNewDawn\Tests\Support\horizonJob;
 use function NckRtl\HorizonNewDawn\Tests\Support\mockDashboardContract;
 use function Pest\Laravel\post;
@@ -36,7 +36,8 @@ it('retries failed jobs from one queue', function (): void {
     $other->queue = 'reports';
 
     $repository = mockDashboardContract(JobRepository::class);
-    dashboardReturns($repository, 'getFailed', new Collection([$matching, $other]));
+    dashboardReturnsFor($repository, 'countFailed', [], 2);
+    dashboardReturnsFor($repository, 'getFailed', ['-1'], new Collection([$matching, $other]));
     app()->instance(JobRepository::class, $repository);
 
     post('/horizon/queues/redis/batches/retry-failed')

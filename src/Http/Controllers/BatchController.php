@@ -7,6 +7,7 @@ namespace NckRtl\HorizonNewDawn\Http\Controllers;
 use Inertia\Inertia;
 use Inertia\Response;
 use NckRtl\HorizonNewDawn\Batches\BatchesData;
+use NckRtl\HorizonNewDawn\Batches\BatchFilterCatalog;
 use NckRtl\HorizonNewDawn\Batches\ClearableBatches;
 use NckRtl\HorizonNewDawn\Http\Requests\BatchIndexRequest;
 use NckRtl\HorizonNewDawn\Support\Data\PageMetaData;
@@ -18,6 +19,7 @@ final class BatchController
     public function index(
         BatchIndexRequest $request,
         BatchesData $batches,
+        BatchFilterCatalog $batchFilterCatalog,
         ClearableBatches $clearableBatches,
     ): Response {
         $filters = $request->getData();
@@ -38,6 +40,7 @@ final class BatchController
                 'created' => $filters->created?->value,
             ],
             'batchClearCounts' => $clearableBatches->counts(),
+            'batchFilterCatalog' => $batchFilterCatalog->get(),
             'batches' => Inertia::scroll(
                 [
                     'data' => $page->batches,

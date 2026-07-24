@@ -18,24 +18,28 @@ final readonly class ClearFailedJobs
 
     public function handle(): int
     {
-        $removed = 0;
+        $ids = [];
+        $sourceTotal = max(0, (int) $this->jobs->countFailed());
 
-        do {
-            $chunk = $this->jobs->getFailed();
-            $chunkRemoved = 0;
+        for ($inspected = 0; $inspected < $sourceTotal; $inspected += self::PAGE_SIZE) {
+            $rawPageSize = min(self::PAGE_SIZE, $sourceTotal - $inspected);
+            $chunk = $this->jobs->getFailed((string) ($inspected - 1));
 
-            foreach ($chunk as $job) {
+            foreach ($chunk->take($rawPageSize) as $job) {
                 if (! is_object($job) || ! is_string($job->id ?? null) || $job->id === '') {
                     continue;
                 }
-
-                $this->jobs->deleteFailed($job->id);
-                $this->failedJobs->forget($job->id);
-                $chunkRemoved++;
+                $ids[$job->id] = $job->id;
             }
+        }
 
-            $removed += $chunkRemoved;
-        } while ($chunk->count() === self::PAGE_SIZE && $chunkRemoved > 0);
+        $removed = 0;
+
+        foreach ($ids as $id) {
+            $this->jobs->deleteFailed($id);
+            $this->failedJobs->forget($id);
+            $removed++;
+        }
 
         return $removed;
     }

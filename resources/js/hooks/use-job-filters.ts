@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { usePage } from "@inertiajs/react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   emptyJobFilterValues,
@@ -25,10 +26,15 @@ export function useJobFilters(
   jobs: readonly JobRow[],
   now = Date.now() / 1000,
 ) {
+  const page = usePage();
   const availableFilterKeys = jobFilterKeys(scope);
   const [values, setValues] = useState<JobFilterValues>(() =>
     filterValuesFromCurrentQuery(availableFilterKeys),
   );
+
+  useEffect(() => {
+    setValues(filterValuesFromCurrentQuery(availableFilterKeys));
+  }, [availableFilterKeys, page.url, scope]);
 
   const setFilterValue = useCallback(
     (filterKey: JobFilterKey, value: string | null) => {

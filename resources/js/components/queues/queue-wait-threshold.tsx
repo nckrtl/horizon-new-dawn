@@ -1,6 +1,6 @@
+import { Duration } from "@/components/duration";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatDuration, lowercaseFirst } from "@/lib/format-duration";
 import type { QueueWaitThreshold, QueueWaitThresholdStatus } from "@/types/queues";
 
 const statusDetails = {
@@ -76,30 +76,40 @@ export function QueueWaitThresholdMetric({ waitThreshold }: { waitThreshold: Que
       <div className="mt-3.5">
         <WaitThresholdDetail
           label={waitLabel}
-          value={formatOptionalDuration(waitThreshold.waitSeconds)}
+          value={
+            waitThreshold.waitSeconds === null ? (
+              "—"
+            ) : (
+              <Duration seconds={waitThreshold.waitSeconds} />
+            )
+          }
         />
         <WaitThresholdDetail
           label="Threshold"
           value={
-            waitThreshold.status === "disabled"
-              ? "—"
-              : lowercaseFirst(formatDuration(waitThreshold.thresholdSeconds))
+            waitThreshold.status === "disabled" ? (
+              "—"
+            ) : (
+              <Duration seconds={waitThreshold.thresholdSeconds} />
+            )
           }
         />
         <WaitThresholdDetail
           label={oldestLabel}
-          value={formatOptionalDuration(waitThreshold.oldestReadyAgeSeconds)}
+          value={
+            waitThreshold.oldestReadyAgeSeconds === null ? (
+              "—"
+            ) : (
+              <Duration seconds={waitThreshold.oldestReadyAgeSeconds} />
+            )
+          }
         />
       </div>
     </div>
   );
 }
 
-function formatOptionalDuration(seconds: number | null) {
-  return seconds === null ? "—" : lowercaseFirst(formatDuration(seconds));
-}
-
-function WaitThresholdDetail({ label, value }: { label: string; value: string }) {
+function WaitThresholdDetail({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-3 border-t border-dashed border-separator py-[7px] text-[13px]">
       <span className="text-muted-foreground">{label}</span>

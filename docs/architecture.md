@@ -6,7 +6,7 @@ Horizon New Dawn is an additive Laravel package that replaces Horizon's browser 
 
 - Render Horizon data through PHP and Inertia instead of adding a duplicate browser-facing API client.
 - Reuse Horizon's contracts and repositories so data semantics stay aligned with the installed Horizon version.
-- Preserve Horizon's route path, authentication middleware, authorization callback, and API controllers.
+- Preserve Horizon's route path, authentication middleware, authorization callback, and API route contract.
 - Keep the package isolated from the host application's Inertia root view and frontend build.
 - Use package-owned controllers and routes for the complete browser interface while retaining Horizon's API contract.
 

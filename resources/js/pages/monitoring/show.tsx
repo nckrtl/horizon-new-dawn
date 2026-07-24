@@ -1,5 +1,5 @@
-import { Head, InfiniteScroll } from "@inertiajs/react";
-import { useState } from "react";
+import { Head, InfiniteScroll, usePage } from "@inertiajs/react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { MonitoringActionsMenu } from "@/components/monitoring/monitoring-actions-menu";
@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAutoLoad } from "@/hooks/use-auto-load";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
+import { copyToClipboard } from "@/lib/clipboard";
 import { currentQueryParameter, replaceCurrentQuery } from "@/lib/url-query";
 import type { MonitoringTagPageProps } from "@/types/monitoring";
 
@@ -38,38 +39,22 @@ function formatRetention(minutes: number) {
 }
 
 async function copyTag(tag: string) {
-  try {
-    if (!navigator.clipboard) {
-      throw new Error("Clipboard API unavailable");
-    }
-
-    await navigator.clipboard.writeText(tag);
+  if (await copyToClipboard(tag)) {
     toast.success("Tag copied.");
-  } catch {
-    const input = document.createElement("textarea");
-    input.value = tag;
-    input.setAttribute("readonly", "");
-    input.style.position = "fixed";
-    input.style.opacity = "0";
-    document.body.append(input);
-    input.select();
-    const copied = document.execCommand("copy");
-    input.remove();
 
-    if (copied) {
-      toast.success("Tag copied.");
-
-      return;
-    }
-
-    toast.error("Tag could not be copied.");
+    return;
   }
+
+  toast.error("Tag could not be copied.");
 }
 
 function MonitoringShow({ horizon, tag, status, summary, jobs }: MonitoringTagPageProps) {
+  const page = usePage();
   const { autoLoad } = useAutoLoadPreference();
   const [jobFilter, setJobFilter] = useState(() => currentQueryParameter("job"));
   const [queueFilter, setQueueFilter] = useState(() => currentQueryParameter("queue"));
+  const [hasClientSort, setHasClientSort] = useState(() => currentQueryParameter("sort") !== null);
+  const jobItemsRef = useRef<HTMLTableSectionElement>(null);
   const refreshedJobs = useAutoLoad({
     enabled: autoLoad,
     prop: "jobs",
@@ -87,6 +72,28 @@ function MonitoringShow({ horizon, tag, status, summary, jobs }: MonitoringTagPa
     setQueueFilter(value);
     replaceCurrentQuery({ queue: value });
   };
+  const clearFilters = () => {
+    setJobFilter(null);
+    setQueueFilter(null);
+    replaceCurrentQuery({ job: null, queue: null });
+  };
+
+  useEffect(() => {
+    setJobFilter(currentQueryParameter("job"));
+    setQueueFilter(currentQueryParameter("queue"));
+  }, [page.url]);
+
+  useEffect(() => {
+    if (
+      !hasClientSort ||
+      currentQueryParameter("sort") === null ||
+      currentQueryParameter("starting_at") === null
+    ) {
+      return;
+    }
+
+    replaceCurrentQuery({ starting_at: null });
+  }, [hasClientSort, page.url]);
 
   return (
     <>
@@ -152,11 +159,20 @@ function MonitoringShow({ horizon, tag, status, summary, jobs }: MonitoringTagPa
               queueFilter={queueFilter}
               onJobFilterChange={changeJobFilter}
               onQueueFilterChange={changeQueueFilter}
+              onClearFilters={clearFilters}
             />
           </div>
         </div>
         <CardContent className="p-0">
-          <InfiniteScroll data="jobs" onlyNext buffer={600} loading={<LoadingRows />}>
+          <InfiniteScroll
+            key={`${tag}:${status}:${jobs.available}`}
+            data="jobs"
+            itemsElement={jobItemsRef}
+            onlyNext
+            preserveUrl={hasClientSort}
+            buffer={600}
+            loading={<LoadingRows />}
+          >
             <MonitoringJobTable
               jobs={refreshedJobs.items}
               status={status}
@@ -167,6 +183,8 @@ function MonitoringShow({ horizon, tag, status, summary, jobs }: MonitoringTagPa
               onLoadNewEntries={refreshedJobs.loadNewEntries}
               jobFilter={jobFilter}
               queueFilter={queueFilter}
+              onSortedChange={setHasClientSort}
+              bodyRef={jobItemsRef}
             />
           </InfiniteScroll>
         </CardContent>

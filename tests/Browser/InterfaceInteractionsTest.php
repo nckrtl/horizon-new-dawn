@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use function NckRtl\HorizonNewDawn\Tests\Support\bindBrowserPageFixtures;
+use function NckRtl\HorizonNewDawn\Tests\Support\bindBrowserProcessTransitionFixtures;
 use function NckRtl\HorizonNewDawn\Tests\Support\bindBrowserSupervisorScalingFixtures;
 
 describe('Horizon interface interactions', function (): void {
@@ -205,6 +206,65 @@ describe('Horizon interface interactions', function (): void {
             ->assertSee('Scaling up from 6 processes to 7 processes')
             ->click('[aria-label="Auto load new entries"]')
             ->assertMissing('[data-scaling-state]');
+
+        if ($autoRefreshWasEnabled) {
+            $page->click('[aria-label="Auto load new entries"]');
+        }
+
+        $page
+            ->assertNoJavaScriptErrors()
+            ->assertNoConsoleLogs()
+            ->assertNoAccessibilityIssues();
+    });
+
+    it('prevents a parent command while a child command is converging', function (): void {
+        $instance = bindBrowserProcessTransitionFixtures();
+        $supervisor = $instance.':supervisor-1';
+
+        visit('/horizon/instances')
+            ->click("button[aria-label=\"Supervisor {$supervisor} actions\"]")
+            ->click('Continue supervisor')
+            ->assertSee('Supervisor continue requested.')
+            ->assertSee('Continuing')
+            ->assertAttribute(
+                "button[aria-label=\"Horizon instance {$instance} actions\"]",
+                'aria-disabled',
+                'true',
+            )
+            ->assertNoJavaScriptErrors()
+            ->assertNoConsoleLogs();
+    });
+
+    it('pauses managed supervisors before allowing one to continue independently', function (): void {
+        $instance = bindBrowserProcessTransitionFixtures(supervisorPaused: false);
+        $supervisor = $instance.':supervisor-1';
+        $page = visit('/horizon/instances');
+        $autoRefreshWasEnabled = $page->script(
+            '() => localStorage.getItem("horizonAutoLoadsNewEntries") === "1"',
+        );
+
+        if ($autoRefreshWasEnabled) {
+            $page->click('[aria-label="Auto load new entries"]');
+        }
+
+        $instanceActions = "button[aria-label=\"Horizon instance {$instance} actions\"]";
+        $supervisorActions = "button[aria-label=\"Supervisor {$supervisor} actions\"]";
+
+        $page
+            ->assertAttribute('[aria-label="Auto load new entries"]', 'aria-pressed', 'false')
+            ->click($instanceActions)
+            ->click('Pause instance')
+            ->assertSee('Pausing')
+            ->assertSee('Horizon pause requested.')
+            ->click($instanceActions)
+            ->assertSee('Continue instance')
+            ->click($instanceActions)
+            ->click($supervisorActions)
+            ->click('Continue supervisor')
+            ->assertSee('Supervisor continue requested.')
+            ->assertSee('Continuing')
+            ->assertSee('Paused')
+            ->assertSee('Running');
 
         if ($autoRefreshWasEnabled) {
             $page->click('[aria-label="Auto load new entries"]');

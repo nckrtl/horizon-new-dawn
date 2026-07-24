@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
 import { BatchPendingJobsActions } from "@/components/batches/batch-actions";
 import { BatchJobsTabs } from "@/components/batches/batch-jobs-tabs";
 import { ProgressRing } from "@/components/batches/progress-ring";
+import { Duration } from "@/components/duration";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { show as queueShow } from "@/generated/routes/horizon-new-dawn/queues";
 import { useActiveTabQuery } from "@/hooks/use-active-tab-query";
 import { usePageRefresh } from "@/hooks/use-dashboard-refresh";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
-import { formatRuntime } from "@/lib/format-duration";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { currentQueryParameter } from "@/lib/url-query";
 import type { BatchDetail, BatchDetailPageProps, BatchJobTab } from "@/types/batches";
@@ -229,7 +229,7 @@ function batchTimings(batch: BatchDetail): {
 
 function timingValue(value: number | null, unavailableReason: string | null): React.ReactNode {
   if (value !== null) {
-    return formatRuntime(value);
+    return <Duration seconds={value} format="precise" showRawValue />;
   }
 
   if (unavailableReason === null) {

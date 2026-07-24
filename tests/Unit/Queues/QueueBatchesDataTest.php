@@ -6,6 +6,7 @@ use Illuminate\Bus\Batch;
 use Illuminate\Bus\BatchRepository;
 use Illuminate\Cache\CacheManager;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
+use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Laravel\Horizon\Contracts\JobRepository;
 use NckRtl\HorizonNewDawn\Batches\BatchesData;
 use NckRtl\HorizonNewDawn\Batches\BatchJobsData;
@@ -14,6 +15,7 @@ use NckRtl\HorizonNewDawn\Jobs\JobsData;
 use NckRtl\HorizonNewDawn\Queues\Data\QueueRetainedBatchesData;
 use NckRtl\HorizonNewDawn\Queues\QueueBatchesData;
 
+use function NckRtl\HorizonNewDawn\Tests\Support\dashboardExpects;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsFor;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardThrowsFor;
 use function NckRtl\HorizonNewDawn\Tests\Support\horizonBatch;
@@ -55,6 +57,11 @@ function retainedQueueBatch(
     return $batch;
 }
 
+function retainedBatchId(int $index): string
+{
+    return sprintf('batch-%03d', $index);
+}
+
 beforeEach(function (): void {
     app(CacheFactory::class)->store()->clear();
     config()->set('horizon-new-dawn.poll_interval', 0);
@@ -69,7 +76,9 @@ it('includes implicitly attributed batches in queue pages and summaries', functi
     $repository = mockDashboardContract(BatchRepository::class);
     $implicit = retainedQueueBatch('implicit', null, pending: 4);
     dashboardReturnsFor($repository, 'get', [50, null], [$implicit]);
+    dashboardReturnsFor($repository, 'get', [50, 'implicit'], []);
     dashboardReturnsFor($repository, 'get', [50, null], [$implicit]);
+    dashboardReturnsFor($repository, 'get', [50, 'implicit'], []);
 
     $data = retainedQueueBatchesData($repository);
     $summary = $data->summary('reports');
@@ -92,7 +101,9 @@ it('filters retained batches and counts only genuinely active matching batches',
         retainedQueueBatch('unattributed', null),
     ];
     dashboardReturnsFor($repository, 'get', [50, null], $source);
+    dashboardReturnsFor($repository, 'get', [50, 'unattributed'], []);
     dashboardReturnsFor($repository, 'get', [50, null], $source);
+    dashboardReturnsFor($repository, 'get', [50, 'unattributed'], []);
 
     $data = retainedQueueBatchesData($repository);
     $summary = $data->summary('reports');
@@ -139,6 +150,7 @@ it('replaces unserializable legacy summary objects with scalar cache payloads', 
     dashboardReturnsFor($repository, 'get', [50, null], [
         retainedQueueBatch('active', 'reports', pending: 4),
     ]);
+    dashboardReturnsFor($repository, 'get', [50, 'active'], []);
 
     $data = retainedQueueBatchesData($repository);
     $first = $data->summary('reports');
@@ -151,15 +163,49 @@ it('replaces unserializable legacy summary objects with scalar cache payloads', 
         ->and($cache->get($cacheKey))->toBeArray();
 });
 
+it('rounds a 1500ms retained batch summary poll interval down to a one second cache ttl', function (): void {
+    config()->set('horizon-new-dawn.poll_interval', 1500);
+
+    $repository = mockDashboardContract(BatchRepository::class);
+    dashboardReturnsFor($repository, 'get', [50, null], [
+        retainedQueueBatch('active', 'reports', pending: 4),
+    ]);
+    dashboardReturnsFor($repository, 'get', [50, 'active'], []);
+
+    $cache = mockDashboardContract(CacheRepository::class);
+    $factory = mockDashboardContract(CacheFactory::class);
+    dashboardExpects($factory, 'store', times: 'twice', value: $cache);
+    dashboardExpects(
+        $cache,
+        'remember',
+        [
+            Mockery::type('string'),
+            1,
+            Mockery::type(Closure::class),
+        ],
+        'once',
+        returnUsing: static fn (string $key, int $seconds, Closure $callback): array => $callback(),
+    );
+
+    $jobs = mockDashboardContract(JobRepository::class);
+    $data = new QueueBatchesData(
+        $repository,
+        new BatchesData($repository, new BatchJobsData($jobs, new JobsData($jobs))),
+        $factory,
+    );
+
+    expect($data->summary('reports')->total)->toBe(1);
+});
+
 it('continues from the final inspected batch after a bounded nonmatching scan', function (): void {
     $repository = mockDashboardContract(BatchRepository::class);
 
     foreach (range(0, 4) as $page) {
         $highest = 250 - ($page * 50);
         $lowest = $highest - 49;
-        $before = $page === 0 ? null : 'batch-'.($highest + 1);
+        $before = $page === 0 ? null : retainedBatchId($highest + 1);
         dashboardReturnsFor($repository, 'get', [50, $before], array_map(
-            static fn (int $index): Batch => retainedQueueBatch("batch-{$index}", 'other'),
+            static fn (int $index): Batch => retainedQueueBatch(retainedBatchId($index), 'other'),
             range($highest, $lowest),
         ));
     }
@@ -169,8 +215,33 @@ it('continues from the final inspected batch after a bounded nonmatching scan', 
     expect($page->rows)->toBe([])
         ->and($page->total)->toBe(0)
         ->and($page->complete)->toBeFalse()
-        ->and($page->next)->toBe('batch-1')
+        ->and($page->next)->toBe('batch-051')
         ->and($page->message)->toBe('More retained entries may exist for this queue.');
+});
+
+it('caps queue batch pages at the 50th matching batch and uses that batch id as the continuation cursor', function (): void {
+    $repository = mockDashboardContract(BatchRepository::class);
+    $firstPage = array_map(
+        static fn (int $index): Batch => retainedQueueBatch(retainedBatchId($index), 'reports'),
+        range(200, 152),
+    );
+    $firstPage[] = retainedQueueBatch(retainedBatchId(151), 'other');
+    $secondPage = [
+        retainedQueueBatch(retainedBatchId(150), 'reports'),
+        retainedQueueBatch(retainedBatchId(149), 'reports'),
+        retainedQueueBatch(retainedBatchId(148), 'other'),
+    ];
+    dashboardReturnsFor($repository, 'get', [50, null], $firstPage);
+    dashboardReturnsFor($repository, 'get', [50, retainedBatchId(151)], $secondPage);
+
+    $page = retainedQueueBatchesData($repository)->page('reports', null);
+
+    expect($page->rows)->toHaveCount(50)
+        ->and($page->next)->toBe('batch-150')
+        ->and($page->complete)->toBeFalse()
+        ->and($page->message)->toBeNull()
+        ->and($page->rows[48]->id)->toBe('batch-152')
+        ->and($page->rows[49]->id)->toBe('batch-150');
 });
 
 it('marks a capped retained batch summary as incomplete', function (): void {
@@ -179,9 +250,9 @@ it('marks a capped retained batch summary as incomplete', function (): void {
     foreach (range(0, 4) as $page) {
         $highest = 250 - ($page * 50);
         $lowest = $highest - 49;
-        $before = $page === 0 ? null : 'batch-'.($highest + 1);
+        $before = $page === 0 ? null : retainedBatchId($highest + 1);
         dashboardReturnsFor($repository, 'get', [50, $before], array_map(
-            static fn (int $index): Batch => retainedQueueBatch("batch-{$index}", 'reports'),
+            static fn (int $index): Batch => retainedQueueBatch(retainedBatchId($index), 'reports'),
             range($highest, $lowest),
         ));
     }
@@ -191,6 +262,32 @@ it('marks a capped retained batch summary as incomplete', function (): void {
     expect($summary->total)->toBe(250)
         ->and($summary->complete)->toBeFalse()
         ->and($summary->previews)->toHaveCount(3);
+});
+
+it('bypasses retained batch summary caching for subsecond poll intervals', function (): void {
+    config()->set('horizon-new-dawn.poll_interval', 999);
+
+    $repository = mockDashboardContract(BatchRepository::class);
+
+    foreach (range(1, 2) as $_) {
+        dashboardReturnsFor($repository, 'get', [50, null], [
+            retainedQueueBatch('active', 'reports', pending: 4),
+        ]);
+        dashboardReturnsFor($repository, 'get', [50, 'active'], []);
+    }
+
+    $factory = mockDashboardContract(CacheFactory::class);
+    dashboardExpects($factory, 'store', times: 'never');
+
+    $jobs = mockDashboardContract(JobRepository::class);
+    $data = new QueueBatchesData(
+        $repository,
+        new BatchesData($repository, new BatchJobsData($jobs, new JobsData($jobs))),
+        $factory,
+    );
+
+    expect($data->summary('reports')->total)->toBe(1)
+        ->and($data->summary('reports')->total)->toBe(1);
 });
 
 it('isolates batch repository failures behind safe states', function (): void {

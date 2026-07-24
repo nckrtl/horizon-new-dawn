@@ -1,9 +1,11 @@
 import { Link, router } from "@inertiajs/react";
 import { TriangleAlertIcon } from "lucide-react";
+import { useEffect, type Ref } from "react";
 
 import { SortableTableHead } from "@/components/data-table/sortable-table-head";
 import { NewEntriesTableRow } from "@/components/data-table/new-entries-alert";
 import { TableEmpty } from "@/components/data-table/table-empty";
+import { Duration } from "@/components/duration";
 import { FailedJobActionsMenu } from "@/components/jobs/failed-job-actions";
 import { JobTablePrimaryCell } from "@/components/jobs/job-table-primary-cell";
 import { FailedJobsNavigationIcon } from "@/components/navigation-icons";
@@ -69,6 +71,9 @@ export function FailedJobTable({
   onLoadNewEntries,
   emptyTitle,
   emptyDescription,
+  visibleJobIds,
+  onSortedChange,
+  bodyRef,
 }: {
   jobs: readonly JobRow[];
   horizonBaseUrl: string;
@@ -78,8 +83,27 @@ export function FailedJobTable({
   onLoadNewEntries?: () => void;
   emptyTitle?: string;
   emptyDescription?: string;
+  visibleJobIds?: ReadonlySet<string>;
+  onSortedChange?: (sorted: boolean) => void;
+  bodyRef?: Ref<HTMLTableSectionElement>;
 }) {
   const sorted = useSortableRows(jobs, columns, { persist: true });
+  const isSorted = sorted.sort !== null;
+  const hasVisibleJobs =
+    visibleJobIds === undefined
+      ? sorted.rows.length > 0
+      : sorted.rows.some((job) => visibleJobIds.has(job.id));
+  const renderedRows =
+    visibleJobIds === undefined
+      ? sorted.rows
+      : [
+          ...sorted.rows.filter((job) => visibleJobIds.has(job.id)),
+          ...sorted.rows.filter((job) => !visibleJobIds.has(job.id)),
+        ];
+
+  useEffect(() => {
+    onSortedChange?.(isSorted);
+  }, [isSorted, onSortedChange]);
 
   if (!available) {
     return (
@@ -119,11 +143,11 @@ export function FailedJobTable({
           <SortableTableHead label="Actions" className="w-[80px] px-4 text-right sm:px-6" />
         </TableRow>
       </TableHeader>
-      <TableBody>
+      <TableBody role="presentation">
         {hasNewEntries && onLoadNewEntries ? (
           <NewEntriesTableRow columns={4} onLoad={onLoadNewEntries} />
         ) : null}
-        {sorted.rows.length === 0 ? (
+        {!hasVisibleJobs ? (
           <TableEmpty
             columns={4}
             title={emptyTitle ?? "No failed jobs"}
@@ -131,7 +155,9 @@ export function FailedJobTable({
             icon={FailedJobsNavigationIcon}
           />
         ) : null}
-        {sorted.rows.map((job) => {
+      </TableBody>
+      <TableBody ref={bodyRef}>
+        {renderedRows.map((job) => {
           const detailUrl = resolveHorizonRoute(failedJobShow(job.id), horizonBaseUrl).url;
           const retryOfUrl = job.retryOf
             ? resolveHorizonRoute(failedJobShow(job.retryOf), horizonBaseUrl).url
@@ -142,6 +168,7 @@ export function FailedJobTable({
             <TableRow
               className="cursor-pointer"
               key={job.id}
+              hidden={visibleJobIds !== undefined && !visibleJobIds.has(job.id)}
               onClick={(event) => {
                 if (isInteractiveTarget(event.target)) {
                   return;
@@ -194,7 +221,7 @@ export function FailedJobTable({
                 }
               />
               <TableCell className="px-4 text-right tabular-nums text-muted-foreground sm:px-6">
-                {job.runtime === null ? "—" : `${job.runtime.toFixed(2)}s`}
+                {job.runtime === null ? "—" : <Duration seconds={job.runtime} format="precise" />}
               </TableCell>
               <TableCell className="px-4 text-muted-foreground sm:px-6">
                 {formatTimestamp(job.failedAt)}

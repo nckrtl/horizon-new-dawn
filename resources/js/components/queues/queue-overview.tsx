@@ -8,6 +8,7 @@ import {
   OverviewStatLink,
   retainedPeriodLabel,
 } from "@/components/dashboard/dashboard-overview";
+import { Duration } from "@/components/duration";
 import { QueueActionsMenu, QueuePauseBadge } from "@/components/queues/queue-actions-menu";
 import { QueueWaitThresholdMetric } from "@/components/queues/queue-wait-threshold";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -251,9 +252,11 @@ function QueueStatistics({
         <QueueMetric
           label="Average job runtime"
           value={
-            summary.averageRuntime === null
-              ? "—"
-              : `${numberFormatter.format(summary.averageRuntime)}s`
+            summary.averageRuntime === null ? (
+              "—"
+            ) : (
+              <Duration seconds={summary.averageRuntime} format="precise" />
+            )
           }
           detail="Since last snapshot"
         />
@@ -323,7 +326,7 @@ function QueueMetric({
   detail,
 }: {
   label: string;
-  value: number | string;
+  value: React.ReactNode;
   detail?: string;
 }) {
   return (

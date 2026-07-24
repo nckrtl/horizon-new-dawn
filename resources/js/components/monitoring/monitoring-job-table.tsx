@@ -1,10 +1,11 @@
 import { router } from "@inertiajs/react";
 import { TriangleAlertIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, type Ref } from "react";
 
 import { NewEntriesTableRow } from "@/components/data-table/new-entries-alert";
 import { SortableTableHead } from "@/components/data-table/sortable-table-head";
 import { TableEmpty } from "@/components/data-table/table-empty";
+import { Duration } from "@/components/duration";
 import { FailedJobActionsMenu } from "@/components/jobs/failed-job-actions";
 import { JobTablePrimaryCell } from "@/components/jobs/job-table-primary-cell";
 import { MonitoringNavigationIcon } from "@/components/navigation-icons";
@@ -56,6 +57,8 @@ export function MonitoringJobTable({
   onLoadNewEntries,
   jobFilter = null,
   queueFilter = null,
+  onSortedChange,
+  bodyRef,
 }: {
   jobs: readonly JobRow[];
   status: MonitoringStatus;
@@ -66,24 +69,40 @@ export function MonitoringJobTable({
   onLoadNewEntries?: () => void;
   jobFilter?: string | null;
   queueFilter?: string | null;
+  onSortedChange?: (sorted: boolean) => void;
+  bodyRef?: Ref<HTMLTableSectionElement>;
 }) {
   const now = useScheduledJobClock(jobs);
   const sorted = useSortableRows(jobs, columns, { persist: true });
   const failed = status === "failed";
+  const isSorted = sorted.sort !== null;
 
-  const filteredRows = useMemo(() => {
-    return sorted.rows.filter((row) => {
-      if (queueFilter !== null && row.queue !== queueFilter) {
-        return false;
-      }
+  const visibleJobIds = useMemo(() => {
+    return new Set(
+      jobs
+        .filter((row) => {
+          if (queueFilter !== null && row.queue !== queueFilter) {
+            return false;
+          }
 
-      if (jobFilter !== null && row.name !== jobFilter) {
-        return false;
-      }
+          if (jobFilter !== null && row.name !== jobFilter) {
+            return false;
+          }
 
-      return true;
-    });
-  }, [jobFilter, queueFilter, sorted.rows]);
+          return true;
+        })
+        .map((row) => row.id),
+    );
+  }, [jobFilter, jobs, queueFilter]);
+  const hasVisibleJobs = visibleJobIds.size > 0;
+  const renderedRows = [
+    ...sorted.rows.filter((job) => visibleJobIds.has(job.id)),
+    ...sorted.rows.filter((job) => !visibleJobIds.has(job.id)),
+  ];
+
+  useEffect(() => {
+    onSortedChange?.(isSorted);
+  }, [isSorted, onSortedChange]);
 
   if (!available) {
     return (
@@ -138,11 +157,11 @@ export function MonitoringJobTable({
             ) : null}
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody role="presentation">
           {hasNewEntries && onLoadNewEntries ? (
             <NewEntriesTableRow columns={failed ? 4 : 3} onLoad={onLoadNewEntries} />
           ) : null}
-          {filteredRows.length === 0 ? (
+          {!hasVisibleJobs ? (
             <TableEmpty
               columns={failed ? 4 : 3}
               title={jobs.length === 0 ? "No jobs for this tag" : "No matching jobs"}
@@ -154,7 +173,9 @@ export function MonitoringJobTable({
               icon={MonitoringNavigationIcon}
             />
           ) : null}
-          {filteredRows.map((job) => {
+        </TableBody>
+        <TableBody ref={bodyRef}>
+          {renderedRows.map((job) => {
             const failedDetail = failed || job.status === "failed";
             const detailUrl = failedDetail
               ? resolveHorizonRoute(failedJobShow(job.id), horizonBaseUrl).url
@@ -171,6 +192,7 @@ export function MonitoringJobTable({
               <TableRow
                 className="cursor-pointer"
                 key={job.id}
+                hidden={!visibleJobIds.has(job.id)}
                 onClick={(event) => {
                   if (isInteractiveTarget(event.target)) {
                     return;
@@ -198,7 +220,11 @@ export function MonitoringJobTable({
                   </TableCell>
                 ) : (
                   <TableCell className="px-6 text-right text-muted-foreground">
-                    {job.runtime === null ? "—" : `${job.runtime.toFixed(2)}s`}
+                    {job.runtime === null ? (
+                      "—"
+                    ) : (
+                      <Duration seconds={job.runtime} format="precise" />
+                    )}
                   </TableCell>
                 )}
                 {failed ? (

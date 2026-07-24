@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import { Duration } from "@/components/duration";
 import { FailedJobActionsMenu } from "@/components/jobs/failed-job-actions";
 import { JobStatus } from "@/components/jobs/job-status";
 import { JobTags } from "@/components/jobs/job-tags";
@@ -38,7 +39,6 @@ import { show as queueShow } from "@/generated/routes/horizon-new-dawn/queues";
 import { useActiveTabQuery } from "@/hooks/use-active-tab-query";
 import { usePageRefresh } from "@/hooks/use-dashboard-refresh";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
-import { formatRuntime } from "@/lib/format-duration";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { isInteractiveTarget } from "@/lib/interactive-target";
 import { currentQueryParameter } from "@/lib/url-query";
@@ -139,9 +139,23 @@ function FailedJobShow({ horizon, job }: FailedJobDetailPageProps) {
     ...(job.reservedAt !== null
       ? [{ label: "Reserved at", value: timestamp(job.reservedAt) }]
       : []),
-    ...(waitTime !== null ? [{ label: "Wait time", value: formatRuntime(waitTime) }] : []),
+    ...(waitTime !== null
+      ? [
+          {
+            label: "Wait time",
+            value: <Duration seconds={waitTime} format="precise" showRawValue />,
+          },
+        ]
+      : []),
     { label: "Failed at", value: timestamp(job.failedAt) },
-    ...(job.runtime !== null ? [{ label: "Runtime", value: formatRuntime(job.runtime) }] : []),
+    ...(job.runtime !== null
+      ? [
+          {
+            label: "Runtime",
+            value: <Duration seconds={job.runtime} format="precise" showRawValue />,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -278,7 +292,7 @@ function FailedJobDataTabs({
 
           <TabsContent value="context" className="mt-0">
             {hasContext ? (
-              <JsonPayload value={job.context} />
+              <JsonPayload value={job.context} copyLabel="exception context" />
             ) : (
               <DataEmptyState
                 icon={BracesIcon}

@@ -42,6 +42,7 @@ it('retries failed jobs only from retained batches for the selected queue', func
 
     $batches = mockDashboardContract(BatchRepository::class);
     dashboardReturnsFor($batches, 'get', [50, null], [$matching, $otherQueue, $withoutFailures]);
+    dashboardReturnsFor($batches, 'get', [50, 'successful'], []);
     dashboardReturnsFor($batches, 'find', ['matching'], $matching);
 
     $jobs = mockDashboardContract(JobRepository::class);

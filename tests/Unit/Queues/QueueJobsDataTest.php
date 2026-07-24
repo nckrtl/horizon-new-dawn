@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\CacheManager;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
+use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Laravel\Horizon\Contracts\JobRepository;
 use Laravel\Horizon\Contracts\TagRepository;
 use NckRtl\HorizonNewDawn\FailedJobs\FailedJobRetryEligibility;
@@ -15,6 +16,7 @@ use NckRtl\HorizonNewDawn\Queues\QueueActivityTab;
 use NckRtl\HorizonNewDawn\Queues\QueueJobsData;
 use NckRtl\HorizonNewDawn\Tests\Support\HorizonJob;
 
+use function NckRtl\HorizonNewDawn\Tests\Support\dashboardExpects;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturnsFor;
 use function NckRtl\HorizonNewDawn\Tests\Support\dashboardThrowsFor;
 use function NckRtl\HorizonNewDawn\Tests\Support\horizonJob;
@@ -291,6 +293,49 @@ it('summarizes retained totals and rolling periods and caches for the polling in
     ])->and($cached->toArray())->toBe($summary->toArray());
 });
 
+it('rounds a 1500ms retained job summary poll interval down to a one second cache ttl', function (): void {
+    config()->set('horizon-new-dawn.poll_interval', 1500);
+
+    $repository = mockDashboardContract(JobRepository::class);
+    dashboardReturnsFor($repository, 'countPending', [], 1);
+    dashboardReturnsFor($repository, 'getPending', ['-1'], collect([
+        retainedQueueJob(0, 'reports'),
+    ]));
+    dashboardReturnsFor($repository, 'countCompleted', [], 0);
+    dashboardReturnsFor($repository, 'countFailed', [], 0);
+    dashboardReturnsFor($repository, 'countSilenced', [], 0);
+
+    $cache = mockDashboardContract(CacheRepository::class);
+    $factory = mockDashboardContract(CacheFactory::class);
+    dashboardExpects($factory, 'store', times: 'twice', value: $cache);
+    dashboardExpects(
+        $cache,
+        'remember',
+        [
+            Mockery::type('string'),
+            1,
+            Mockery::type(Closure::class),
+        ],
+        'once',
+        returnUsing: static fn (string $key, int $seconds, Closure $callback): array => $callback(),
+    );
+
+    $jobs = new JobsData($repository);
+    $data = new QueueJobsData(
+        $repository,
+        $jobs,
+        new FailedJobsData(
+            $repository,
+            mockDashboardContract(TagRepository::class),
+            $jobs,
+            new FailedJobRetryEligibility,
+        ),
+        $factory,
+    );
+
+    expect($data->summary('reports')->pending)->toBe(1);
+});
+
 it('replaces unserializable legacy job summary objects with scalar cache payloads', function (): void {
     requireConfigurableCacheUnserialization();
 
@@ -401,6 +446,41 @@ it('bypasses summary caching when automatic polling is disabled', function (): v
     }
 
     $data = retainedQueueJobsData($repository);
+
+    expect($data->summary('reports')->pending)->toBe(1)
+        ->and($data->summary('reports')->pending)->toBe(1);
+});
+
+it('bypasses retained job summary caching for subsecond poll intervals', function (): void {
+    config()->set('horizon-new-dawn.poll_interval', 999);
+
+    $repository = mockDashboardContract(JobRepository::class);
+
+    foreach (range(1, 2) as $_) {
+        dashboardReturnsFor($repository, 'countPending', [], 1);
+        dashboardReturnsFor($repository, 'getPending', ['-1'], collect([
+            retainedQueueJob(0, 'reports'),
+        ]));
+        dashboardReturnsFor($repository, 'countCompleted', [], 0);
+        dashboardReturnsFor($repository, 'countFailed', [], 0);
+        dashboardReturnsFor($repository, 'countSilenced', [], 0);
+    }
+
+    $factory = mockDashboardContract(CacheFactory::class);
+    dashboardExpects($factory, 'store', times: 'never');
+
+    $jobs = new JobsData($repository);
+    $data = new QueueJobsData(
+        $repository,
+        $jobs,
+        new FailedJobsData(
+            $repository,
+            mockDashboardContract(TagRepository::class),
+            $jobs,
+            new FailedJobRetryEligibility,
+        ),
+        $factory,
+    );
 
     expect($data->summary('reports')->pending)->toBe(1)
         ->and($data->summary('reports')->pending)->toBe(1);

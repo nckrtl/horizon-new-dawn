@@ -143,6 +143,11 @@ final readonly class BatchesData
         return $this->attribution($batch)['queue'];
     }
 
+    public function connection(Batch $batch): ?string
+    {
+        return $this->attribution($batch)['connection'];
+    }
+
     /** @return array{connection: ?string, queue: string} */
     private function attribution(Batch $batch): array
     {

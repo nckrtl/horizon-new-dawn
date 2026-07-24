@@ -16,7 +16,7 @@ use Laravel\Horizon\Horizon;
 use NckRtl\HorizonNewDawn\Batches\BatchClearScope;
 use NckRtl\HorizonNewDawn\Batches\ClearableBatches;
 
-use function NckRtl\HorizonNewDawn\Tests\Support\dashboardReturns;
+use function NckRtl\HorizonNewDawn\Tests\Support\dashboardExpects;
 use function NckRtl\HorizonNewDawn\Tests\Support\horizonJob;
 use function NckRtl\HorizonNewDawn\Tests\Support\mockDashboardContract;
 use function Pest\Laravel\delete;
@@ -58,7 +58,8 @@ beforeEach(function (): void {
         'horizon_new_dawn_batch_clearing',
     );
     $jobs = mockDashboardContract(JobRepository::class);
-    dashboardReturns($jobs, 'getPending', new Collection([
+    dashboardExpects($jobs, 'countPending', times: 'zeroOrMoreTimes', value: 2);
+    dashboardExpects($jobs, 'getPending', ['-1'], 'zeroOrMoreTimes', new Collection([
         batchClearPendingJob(0, 'retry-live-job', 'retry-live'),
         batchClearPendingJob(1, 'cancelled-live-job', 'cancelled-live'),
     ]));

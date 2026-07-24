@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { show as queueShow } from "@/generated/routes/horizon-new-dawn/queues";
 import { usePageRefresh } from "@/hooks/use-dashboard-refresh";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
+import { formatDuration } from "@/lib/format-duration";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import type { HorizonStatus as HorizonStatusValue } from "@/types/dashboard";
 import type { SupervisorDetails, SupervisorDetailsPageProps } from "@/types/supervisors";
@@ -209,7 +210,7 @@ function seconds(value: number | null): string {
     return "—";
   }
 
-  return `${numberFormatter.format(value)} ${value === 1 ? "second" : "seconds"}`;
+  return formatDuration(value, "precise");
 }
 
 function backoff(value: number | number[] | null): string {

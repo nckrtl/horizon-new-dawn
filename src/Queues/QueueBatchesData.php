@@ -46,7 +46,13 @@ final readonly class QueueBatchesData
                     break;
                 }
 
-                $lastId = null;
+                $nextCursor = $this->advanceCursor($source, $cursor);
+
+                if ($nextCursor === null) {
+                    $message = 'More retained entries may exist for this queue.';
+
+                    break;
+                }
 
                 foreach ($source as $batch) {
                     if ($inspected >= self::SCAN_LIMIT) {
@@ -55,35 +61,25 @@ final readonly class QueueBatchesData
 
                     $inspected++;
 
-                    $lastId = $batch->id;
-
                     if ($this->batches->queue($batch) !== $queue) {
                         continue;
                     }
 
                     $rows[] = $this->batches->row($batch);
+
+                    if (count($rows) === self::RESULT_PAGE_SIZE) {
+                        $next = $batch->id;
+
+                        break 2;
+                    }
                 }
-
-                if (count($source) < self::SOURCE_PAGE_SIZE) {
-                    $complete = true;
-
-                    break;
-                }
-
-                if ($lastId === null || $lastId === $cursor) {
-                    $next = null;
-                    $message = 'More retained entries may exist for this queue.';
-
-                    break;
-                }
-
-                $next = $lastId;
 
                 if ($inspected >= self::SCAN_LIMIT) {
                     break;
                 }
 
-                $cursor = $lastId;
+                $cursor = $nextCursor;
+                $next = $nextCursor;
             }
 
             if ($inspected >= self::SCAN_LIMIT) {
@@ -118,10 +114,15 @@ final readonly class QueueBatchesData
             return $this->buildSummary($queue);
         }
 
+        $cacheSeconds = intdiv($pollInterval, 1000);
+
+        if ($cacheSeconds === 0) {
+            return $this->buildSummary($queue);
+        }
+
         try {
             $cache = $this->cache->store();
             $cacheKey = $this->cacheKey($queue);
-            $cacheSeconds = (int) ceil($pollInterval / 1000);
             $payload = $this->rememberSummaryPayload($queue, $cacheSeconds);
             $cached = is_array($payload) ? $this->summaryFromPayload($payload) : null;
 
@@ -179,7 +180,11 @@ final readonly class QueueBatchesData
                     break;
                 }
 
-                $lastId = null;
+                $nextCursor = $this->advanceCursor($source, $cursor);
+
+                if ($nextCursor === null) {
+                    break;
+                }
 
                 foreach ($source as $batch) {
                     if ($inspected >= self::SCAN_LIMIT) {
@@ -187,8 +192,6 @@ final readonly class QueueBatchesData
                     }
 
                     $inspected++;
-
-                    $lastId = $batch->id;
 
                     if ($this->batches->queue($batch) !== $queue) {
                         continue;
@@ -212,17 +215,7 @@ final readonly class QueueBatchesData
                     }
                 }
 
-                if (count($source) < self::SOURCE_PAGE_SIZE) {
-                    $complete = true;
-
-                    break;
-                }
-
-                if ($lastId === null || $lastId === $cursor) {
-                    break;
-                }
-
-                $cursor = $lastId;
+                $cursor = $nextCursor;
             }
 
             return new QueueRetainedBatchesData(
@@ -249,6 +242,26 @@ final readonly class QueueBatchesData
     {
         return ! $batch->cancelled()
             && max(0, $batch->pendingJobs - $batch->failedJobs) > 0;
+    }
+
+    /**
+     * @param  array<int, Batch>  $batches
+     */
+    private function advanceCursor(array $batches, ?string $current): ?string
+    {
+        $batch = end($batches);
+
+        if (! $batch instanceof Batch) {
+            return null;
+        }
+
+        $cursor = $batch->id;
+
+        if ($cursor === '' || ($current !== null && strcmp($cursor, $current) >= 0)) {
+            return null;
+        }
+
+        return $cursor;
     }
 
     private function cacheKey(string $queue): string

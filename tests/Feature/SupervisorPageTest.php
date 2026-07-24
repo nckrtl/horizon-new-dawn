@@ -58,6 +58,28 @@ describe('supervisor detail page', function (): void {
                 ->where('supervisorDetails.message', null));
     });
 
+    it('decodes slash-bearing supervisor names before reading Horizon', function (): void {
+        bindSupervisorDetails((object) [
+            'name' => 'local-host-a1b2:imports/worker',
+            'master' => 'local-host-a1b2',
+            'status' => 'running',
+            'processes' => ['redis:imports' => 2],
+            'options' => [
+                'connection' => 'redis',
+                'queue' => 'imports',
+                'balance' => 'simple',
+                'timeout' => 90,
+            ],
+        ], 'local-host-a1b2:imports/worker');
+
+        get('/horizon/supervisors/local-host-a1b2%3Aimports%2Fworker')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page): AssertableInertia => $page
+                ->component('Supervisors/Show')
+                ->where('supervisorDetails.available', true)
+                ->where('supervisorDetails.supervisor.id', 'local-host-a1b2:imports/worker'));
+    });
+
     it('returns 404 when the active supervisor has disappeared', function (): void {
         bindSupervisorDetails(null, 'missing');
 

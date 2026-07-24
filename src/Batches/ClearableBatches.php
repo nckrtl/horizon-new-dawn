@@ -6,7 +6,6 @@ namespace NckRtl\HorizonNewDawn\Batches;
 
 use Illuminate\Bus\Batch;
 use Illuminate\Bus\BatchRepository;
-use Illuminate\Support\Collection;
 use Laravel\Horizon\Contracts\JobRepository;
 use NckRtl\HorizonNewDawn\Batches\Data\BatchClearCountsData;
 use NckRtl\HorizonNewDawn\Jobs\JobsData;
@@ -135,29 +134,20 @@ final readonly class ClearableBatches
     {
         $batches = [];
         $cursor = null;
-        $visitedCursors = [];
 
-        do {
+        while (true) {
             $page = $this->batches->get(self::BATCH_PAGE_SIZE, $cursor);
+
+            if ($page === []) {
+                break;
+            }
 
             foreach ($page as $batch) {
                 $batches[] = $batch;
             }
 
-            if (count($page) < self::BATCH_PAGE_SIZE) {
-                break;
-            }
-
-            $last = end($page);
-            $next = $last->id;
-
-            if ($next === $cursor || isset($visitedCursors[$next])) {
-                throw new RuntimeException('The batch repository could not be scanned safely.');
-            }
-
-            $visitedCursors[$next] = true;
-            $cursor = $next;
-        } while (true);
+            $cursor = $this->advanceBatchCursor($page, $cursor);
+        }
 
         return $batches;
     }
@@ -169,13 +159,13 @@ final readonly class ClearableBatches
     private function activeBatchIds(array $candidates): array
     {
         $active = [];
-        $cursor = null;
-        $visitedCursors = [];
+        $sourceTotal = max(0, (int) $this->jobs->countPending());
 
-        do {
-            $page = collect($this->jobs->getPending($cursor));
+        for ($inspected = 0; $inspected < $sourceTotal; $inspected += self::JOB_PAGE_SIZE) {
+            $rawPageSize = min(self::JOB_PAGE_SIZE, $sourceTotal - $inspected);
+            $page = collect($this->jobs->getPending((string) ($inspected - 1)));
 
-            foreach ($page as $job) {
+            foreach ($page->take($rawPageSize) as $job) {
                 if (! is_object($job)) {
                     continue;
                 }
@@ -187,30 +177,31 @@ final readonly class ClearableBatches
                 }
             }
 
-            if (count($active) === count($candidates) || $page->count() < self::JOB_PAGE_SIZE) {
+            if (count($active) === count($candidates)) {
                 break;
             }
-
-            $next = $this->lastJobIndex($page);
-
-            if ($next === null || $next === $cursor || isset($visitedCursors[$next])) {
-                throw new RuntimeException('Horizon pending jobs could not be scanned safely.');
-            }
-
-            $visitedCursors[$next] = true;
-            $cursor = $next;
-        } while (true);
+        }
 
         return $active;
     }
 
-    /** @param Collection<int, mixed> $jobs */
-    private function lastJobIndex(Collection $jobs): ?string
+    /**
+     * @param  array<int, Batch>  $batches
+     */
+    private function advanceBatchCursor(array $batches, ?string $current): string
     {
-        $last = $jobs->last();
+        $batch = end($batches);
 
-        return is_object($last) && is_numeric($last->index ?? null)
-            ? (string) $last->index
-            : null;
+        if (! $batch instanceof Batch) {
+            throw new RuntimeException('The batch repository returned an empty page.');
+        }
+
+        $cursor = $batch->id;
+
+        if ($cursor === '' || ($current !== null && strcmp($cursor, $current) >= 0)) {
+            throw new RuntimeException('The batch repository could not be scanned safely.');
+        }
+
+        return $cursor;
     }
 }

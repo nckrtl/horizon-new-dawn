@@ -8,7 +8,7 @@ export function StackTrace({ value }: { value: string }) {
   }
 
   return (
-    <CodeBlock>
+    <CodeBlock copyLabel="exception" copyValue={value}>
       <code>
         {frames.map((frame, index) => (
           <span className="block" key={`${index}-${frame}`}>

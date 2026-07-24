@@ -29,11 +29,13 @@ final readonly class RetryQueueBatches
                 return $scheduled;
             }
 
-            $lastId = null;
+            $nextCursor = $this->advanceCursor($source, $cursor);
+
+            if ($nextCursor === null) {
+                return $scheduled;
+            }
 
             foreach ($source as $batch) {
-                $lastId = $batch->id;
-
                 if ($batch->failedJobs === 0 || $this->data->queue($batch) !== $queue) {
                     continue;
                 }
@@ -41,11 +43,22 @@ final readonly class RetryQueueBatches
                 $scheduled += $this->retry->handle($batch->id);
             }
 
-            if (count($source) < self::PAGE_SIZE || $lastId === $cursor) {
-                return $scheduled;
-            }
-
-            $cursor = $lastId;
+            $cursor = $nextCursor;
         }
+    }
+
+    /**
+     * @param  array<int, object>  $batches
+     */
+    private function advanceCursor(array $batches, ?string $current): ?string
+    {
+        $last = end($batches);
+        $cursor = is_object($last) && is_string($last->id ?? null) ? $last->id : null;
+
+        if ($cursor === null || $cursor === '' || ($current !== null && strcmp($cursor, $current) >= 0)) {
+            return null;
+        }
+
+        return $cursor;
     }
 }

@@ -14,6 +14,10 @@ const inertia = vi.hoisted(() => ({
   usePoll: vi.fn(),
 }));
 
+const batchFilters = vi.hoisted(() => ({
+  props: vi.fn(),
+}));
+
 vi.mock("@inertiajs/react", () => ({
   Head: () => null,
   InfiniteScroll: ({ children }: { children: ReactNode }) => children,
@@ -39,6 +43,14 @@ vi.mock("@/layouts/horizon-layout", () => ({
   useResolvedNavigationCounts: () => undefined,
 }));
 
+vi.mock("@/components/batches/batch-filters", () => ({
+  BatchFilters: (props: unknown) => {
+    batchFilters.props(props);
+
+    return null;
+  },
+}));
+
 const horizon = { baseUrl: "/horizon", pollInterval: 0, status: "running" as const };
 
 describe("Inertia search pages", () => {
@@ -48,6 +60,7 @@ describe("Inertia search pages", () => {
     inertia.pollStop.mockReset();
     inertia.routerGet.mockReset();
     inertia.usePoll.mockReset();
+    batchFilters.props.mockReset();
     inertia.usePoll.mockReturnValue({ start: inertia.pollStart, stop: inertia.pollStop });
   });
 
@@ -95,7 +108,35 @@ describe("Inertia search pages", () => {
     expect(inertia.routerGet).toHaveBeenCalledWith(
       "/horizon/batches",
       {},
-      expect.objectContaining({ reset: ["batches"], replace: true }),
+      expect.objectContaining({
+        only: ["query", "filters", "batchClearCounts", "batchFilterCatalog", "batches", "horizon"],
+        reset: ["batches"],
+        replace: true,
+      }),
+    );
+  });
+
+  it("keeps retained batch filter options available before scrolling and preserves active missing values", () => {
+    render(
+      <BatchesIndex
+        horizon={horizon}
+        query=""
+        filters={{ queue: "legacy", connection: "archive", created: null }}
+        batchFilterCatalog={{
+          available: true,
+          queues: ["imports"],
+          connections: ["redis"],
+        }}
+        batches={{ data: [], available: true, message: null }}
+      />,
+    );
+
+    expect(batchFilters.props).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queues: ["imports", "legacy"],
+        connections: ["archive", "redis"],
+        values: { queue: "legacy", connection: "archive", created: null },
+      }),
     );
   });
 

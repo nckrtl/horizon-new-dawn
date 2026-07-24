@@ -1,3 +1,4 @@
+import { shouldIntercept } from "@inertiajs/core";
 import { InfiniteScroll, Link, router } from "@inertiajs/react";
 import { HistoryIcon, SearchIcon, XIcon } from "lucide-react";
 import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -75,6 +76,7 @@ export function QueueActivityTabs({
   horizonBaseUrl: string;
 }) {
   const tabsListRef = useRef<HTMLDivElement>(null);
+  const activityItemsRef = useRef<HTMLTableSectionElement>(null);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
@@ -109,6 +111,11 @@ export function QueueActivityTabs({
         return matchesSearch && (batchStatus === null || batch.status === batchStatus);
       }),
     [batchRows, batchStatus, normalizedSearch],
+  );
+  const visibleJobIds = useMemo(() => new Set(visibleJobs.map((job) => job.id)), [visibleJobs]);
+  const visibleBatchIds = useMemo(
+    () => new Set(visibleBatches.map((batch) => batch.id)),
+    [visibleBatches],
   );
   const hasSearch = normalizedSearch !== "";
   const hasFilters = tab === "batches" ? batchStatus !== null : jobFilters.activeFilterCount > 0;
@@ -172,6 +179,13 @@ export function QueueActivityTabs({
                         prefetch
                         aria-label={`${item.label} ${count}`}
                         onClick={(event) => {
+                          if (
+                            event.currentTarget.hasAttribute("download") ||
+                            !shouldIntercept(event)
+                          ) {
+                            return;
+                          }
+
                           event.preventDefault();
                           router.visit(href, {
                             replace: true,
@@ -234,6 +248,7 @@ export function QueueActivityTabs({
                   filterKeys={jobFilters.availableFilterKeys}
                   values={jobFilters.values}
                   onFilterChange={jobFilters.setFilterValue}
+                  onClearFilters={jobFilters.clearAllFilters}
                   description={`Narrow the loaded ${tab} jobs retained for this queue.`}
                 />
               )
@@ -248,10 +263,17 @@ export function QueueActivityTabs({
             </Alert>
           ) : null}
 
-          <InfiniteScroll data="activity" onlyNext preserveUrl buffer={600}>
+          <InfiniteScroll
+            key={`${queue}:${tab}:${activity.available}`}
+            data="activity"
+            itemsElement={activityItemsRef}
+            onlyNext
+            preserveUrl
+            buffer={600}
+          >
             {tab === "batches" ? (
               <BatchTable
-                batches={visibleBatches}
+                batches={batchRows}
                 horizonBaseUrl={horizonBaseUrl}
                 available={activity.available}
                 message={activity.message}
@@ -262,10 +284,12 @@ export function QueueActivityTabs({
                     : emptyDescription
                 }
                 showBatchActions
+                visibleBatchIds={visibleBatchIds}
+                bodyRef={activityItemsRef}
               />
             ) : tab === "failed" ? (
               <FailedJobTable
-                jobs={visibleJobs}
+                jobs={jobRows}
                 horizonBaseUrl={horizonBaseUrl}
                 available={activity.available}
                 message={activity.message}
@@ -275,10 +299,12 @@ export function QueueActivityTabs({
                     ? `No loaded ${resultName} match your search and filters.`
                     : emptyDescription
                 }
+                visibleJobIds={visibleJobIds}
+                bodyRef={activityItemsRef}
               />
             ) : (
               <JobTable
-                jobs={visibleJobs}
+                jobs={jobRows}
                 type={tab}
                 horizonBaseUrl={horizonBaseUrl}
                 available={activity.available}
@@ -289,6 +315,8 @@ export function QueueActivityTabs({
                     ? `No loaded ${resultName} match your search and filters.`
                     : emptyDescription
                 }
+                visibleJobIds={visibleJobIds}
+                bodyRef={activityItemsRef}
               />
             )}
           </InfiniteScroll>

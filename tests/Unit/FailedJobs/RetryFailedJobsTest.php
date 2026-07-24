@@ -134,6 +134,7 @@ it('walks failed chunks deduplicates ids and includes retry leaves', function ()
     ]);
 
     $repository = mockDashboardContract(JobRepository::class);
+    dashboardReturnsFor($repository, 'countFailed', [], 52);
     dashboardReturnsFor($repository, 'getFailed', ['-1'], $first);
     dashboardReturnsFor($repository, 'getFailed', ['49'], $second);
 
@@ -164,6 +165,7 @@ it('retries only failures from the requested connection and queue', function ():
     $otherConnection->queue = 'batches';
 
     $repository = mockDashboardContract(JobRepository::class);
+    dashboardReturnsFor($repository, 'countFailed', [], 3);
     dashboardReturns($repository, 'getFailed', new Collection([
         $matching,
         $otherQueue,
@@ -196,8 +198,9 @@ it('stops retry-all when a full chunk does not advance', function (): void {
     ));
 
     $repository = mockDashboardContract(JobRepository::class);
+    dashboardReturnsFor($repository, 'countFailed', [], 100);
     dashboardReturnsFor($repository, 'getFailed', ['-1'], $first);
-    dashboardReturnsFor($repository, 'getFailed', ['0'], $second);
+    dashboardReturnsFor($repository, 'getFailed', ['49'], $second);
 
     $action = new RetryAllFailedJobs(
         $repository,
@@ -220,6 +223,7 @@ it('bulk retries the failed leaf instead of branching again from its parent', fu
     $retryLeaf->payload = json_encode([...$payload, 'retry_of' => 'parent'], JSON_THROW_ON_ERROR);
 
     $repository = mockDashboardContract(JobRepository::class);
+    dashboardReturnsFor($repository, 'countFailed', [], 2);
     dashboardReturns($repository, 'getFailed', new Collection([$parent, $retryLeaf]));
 
     $scheduled = (new RetryAllFailedJobs(
@@ -232,5 +236,29 @@ it('bulk retries the failed leaf instead of branching again from its parent', fu
     Bus::assertDispatched(
         HorizonRetryFailedJob::class,
         fn (HorizonRetryFailedJob $job): bool => $job->id === 'retry-leaf',
+    );
+});
+
+it('scans raw failed-job windows and respects the final raw allowance', function (): void {
+    Bus::fake();
+
+    $repository = mockDashboardContract(JobRepository::class);
+    dashboardReturnsFor($repository, 'countFailed', [], 51);
+    dashboardReturnsFor($repository, 'getFailed', ['-1'], new Collection);
+    dashboardReturnsFor($repository, 'getFailed', ['49'], new Collection([
+        horizonJob(50, 'failed-50'),
+        horizonJob(51, 'failed-51'),
+    ]));
+
+    $scheduled = (new RetryAllFailedJobs(
+        $repository,
+        new RetryFailedJob(app(Dispatcher::class), $repository, new FailedJobRetryEligibility),
+    ))->handle();
+
+    expect($scheduled)->toBe(1);
+    Bus::assertDispatchedTimes(HorizonRetryFailedJob::class, 1);
+    Bus::assertDispatched(
+        HorizonRetryFailedJob::class,
+        fn (HorizonRetryFailedJob $job): bool => $job->id === 'failed-50',
     );
 });

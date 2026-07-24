@@ -92,12 +92,14 @@ export function JobFilters({
   filterKeys,
   values,
   onFilterChange,
+  onClearFilters,
   description = "Narrow the loaded jobs using filters available for this view.",
 }: {
   jobs: readonly JobRow[];
   filterKeys: readonly JobFilterKey[];
   values: JobFilterValues;
   onFilterChange: (filterKey: JobFilterKey, value: string | null) => void;
+  onClearFilters: () => void;
   description?: string;
 }) {
   const options = useMemo(
@@ -155,7 +157,7 @@ export function JobFilters({
             type="button"
             variant="ghost"
             disabled={activeFilterCount === 0}
-            onClick={() => filterKeys.forEach((filterKey) => onFilterChange(filterKey, null))}
+            onClick={onClearFilters}
           >
             Clear filters
           </Button>

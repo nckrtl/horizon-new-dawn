@@ -22,6 +22,12 @@
   --color-separator: var(--separator);
   --color-code: var(--code-bg);
   --color-code-foreground: var(--code-fg);
+  --color-code-control: var(--code-control);
+  --color-code-control-hover: var(--code-control-hover);
+  --color-code-control-hover-foreground: var(--code-control-hover-foreground);
+  --color-code-control-hover-border: var(--code-control-hover-border);
+  --color-code-control-foreground: var(--code-control-foreground);
+  --color-code-control-border: var(--code-control-border);
   --color-primary-hover: var(--primary-hover);
   --color-action-primary-hover: var(--action-primary-hover);
   --color-action-primary: var(--action-primary);
@@ -157,6 +163,12 @@
   --code-number: #986801;
   --code-muted: #a0a1a7;
   --code-error: #ca1243;
+  --code-control: color-mix(in oklab, var(--code-fg) 8%, var(--code-bg));
+  --code-control-hover: color-mix(in oklab, var(--primary) 10%, var(--code-bg));
+  --code-control-hover-foreground: var(--primary);
+  --code-control-hover-border: color-mix(in oklab, var(--primary) 32%, var(--code-bg));
+  --code-control-foreground: var(--code-fg);
+  --code-control-border: color-mix(in oklab, var(--code-fg) 18%, transparent);
   --action-primary: #7746ec;
   --action-primary-hover: #8659ef;
   --action-primary-highlight: #8054ed;
@@ -277,6 +289,16 @@
   --code-number: #f78c6c;
   --code-muted: #7681a8;
   --code-error: #f07178;
+  --code-control: color-mix(in oklab, var(--code-fg) 12%, var(--code-bg));
+  --code-control-hover: color-mix(in oklab, var(--action-primary) 16%, var(--code-control));
+  --code-control-hover-foreground: color-mix(
+    in oklab,
+    var(--action-primary) 65%,
+    var(--primary-foreground)
+  );
+  --code-control-hover-border: color-mix(in oklab, var(--action-primary) 40%, var(--code-bg));
+  --code-control-foreground: var(--code-fg);
+  --code-control-border: color-mix(in oklab, var(--code-fg) 24%, transparent);
 }
 
 @keyframes horizon-status-spin {

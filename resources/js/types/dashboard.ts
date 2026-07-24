@@ -1,6 +1,13 @@
 import type { QueueWaitThreshold } from "@/types/queues";
 
 export type HorizonStatus = "running" | "paused" | "inactive" | "unavailable";
+export type HorizonTransitionStatus = "continuing" | "pausing";
+export type HorizonDisplayStatus = HorizonStatus | HorizonTransitionStatus;
+
+export type ProcessTransitions = {
+  instances: Record<string, HorizonTransitionStatus>;
+  supervisors: Record<string, HorizonTransitionStatus>;
+};
 
 export type DashboardSummary = {
   available: boolean;

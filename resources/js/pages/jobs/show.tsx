@@ -1,6 +1,7 @@
 import { Head, Link } from "@inertiajs/react";
 import { useState } from "react";
 
+import { Duration } from "@/components/duration";
 import { JobStatus, type JobStatusValue } from "@/components/jobs/job-status";
 import { PendingJobActionsMenu } from "@/components/jobs/pending-job-actions";
 import { JobTags } from "@/components/jobs/job-tags";
@@ -15,7 +16,6 @@ import { useActiveTabQuery } from "@/hooks/use-active-tab-query";
 import { usePageRefresh } from "@/hooks/use-dashboard-refresh";
 import { useScheduledJobClock } from "@/hooks/use-scheduled-job-clock";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
-import { formatRuntime } from "@/lib/format-duration";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { pendingJobState } from "@/lib/pending-job-state";
 import { currentQueryParameter } from "@/lib/url-query";
@@ -118,7 +118,14 @@ function JobShow({ horizon, type, job }: JobDetailPageProps) {
     ...(job.reservedAt !== null
       ? [{ label: "Reserved at", value: timestamp(job.reservedAt) }]
       : []),
-    ...(waitTime !== null ? [{ label: "Wait time", value: formatRuntime(waitTime) }] : []),
+    ...(waitTime !== null
+      ? [
+          {
+            label: "Wait time",
+            value: <Duration seconds={waitTime} format="precise" showRawValue />,
+          },
+        ]
+      : []),
     ...(status === "failed" && job.failedAt !== null
       ? [{ label: "Failed at", value: timestamp(job.failedAt) }]
       : []),
@@ -126,11 +133,21 @@ function JobShow({ horizon, type, job }: JobDetailPageProps) {
       ? [{ label: "Completed at", value: timestamp(job.completedAt) }]
       : []),
     ...(status === "reserved" && job.runtime !== null
-      ? [{ label: "Processing for", value: formatRuntime(job.runtime) }]
+      ? [
+          {
+            label: "Processing for",
+            value: <Duration seconds={job.runtime} format="precise" showRawValue />,
+          },
+        ]
       : []),
     ...((status === "failed" || status === "completed" || status === "silenced") &&
     job.runtime !== null
-      ? [{ label: "Runtime", value: formatRuntime(job.runtime) }]
+      ? [
+          {
+            label: "Runtime",
+            value: <Duration seconds={job.runtime} format="precise" showRawValue />,
+          },
+        ]
       : []),
   ];
 

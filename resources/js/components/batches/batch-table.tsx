@@ -1,5 +1,6 @@
 import { Link, router } from "@inertiajs/react";
 import { TriangleAlertIcon } from "lucide-react";
+import { useEffect, type Ref } from "react";
 
 import { BatchPendingJobsActions } from "@/components/batches/batch-actions";
 import { ProgressRing } from "@/components/batches/progress-ring";
@@ -55,6 +56,9 @@ export function BatchTable({
   emptyTitle,
   emptyDescription,
   showBatchActions = false,
+  visibleBatchIds,
+  onSortedChange,
+  bodyRef,
 }: {
   batches: readonly BatchRow[];
   horizonBaseUrl: string;
@@ -65,8 +69,27 @@ export function BatchTable({
   emptyTitle?: string;
   emptyDescription?: string;
   showBatchActions?: boolean;
+  visibleBatchIds?: ReadonlySet<string>;
+  onSortedChange?: (sorted: boolean) => void;
+  bodyRef?: Ref<HTMLTableSectionElement>;
 }) {
   const sorted = useSortableRows(batches, columns, { persist: true });
+  const isSorted = sorted.sort !== null;
+  const hasVisibleBatches =
+    visibleBatchIds === undefined
+      ? sorted.rows.length > 0
+      : sorted.rows.some((batch) => visibleBatchIds.has(batch.id));
+  const renderedRows =
+    visibleBatchIds === undefined
+      ? sorted.rows
+      : [
+          ...sorted.rows.filter((batch) => visibleBatchIds.has(batch.id)),
+          ...sorted.rows.filter((batch) => !visibleBatchIds.has(batch.id)),
+        ];
+
+  useEffect(() => {
+    onSortedChange?.(isSorted);
+  }, [isSorted, onSortedChange]);
 
   if (!available) {
     return (
@@ -129,11 +152,11 @@ export function BatchTable({
           ) : null}
         </TableRow>
       </TableHeader>
-      <TableBody>
+      <TableBody role="presentation">
         {hasNewEntries && onLoadNewEntries ? (
           <NewEntriesTableRow columns={showBatchActions ? 7 : 6} onLoad={onLoadNewEntries} />
         ) : null}
-        {sorted.rows.length === 0 ? (
+        {!hasVisibleBatches ? (
           <TableEmpty
             columns={showBatchActions ? 7 : 6}
             title={emptyTitle ?? "No batches"}
@@ -141,13 +164,16 @@ export function BatchTable({
             icon={BatchesNavigationIcon}
           />
         ) : null}
-        {sorted.rows.map((batch) => {
+      </TableBody>
+      <TableBody ref={bodyRef}>
+        {renderedRows.map((batch) => {
           const detailUrl = resolveHorizonRoute(batchShow(batch.id), horizonBaseUrl).url;
 
           return (
             <TableRow
               className="cursor-pointer"
               key={batch.id}
+              hidden={visibleBatchIds !== undefined && !visibleBatchIds.has(batch.id)}
               onClick={(event) => {
                 if (isInteractiveTarget(event.target)) {
                   return;

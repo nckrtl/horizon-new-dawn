@@ -2,6 +2,7 @@ import { Link, router } from "@inertiajs/react";
 import { ChevronRightIcon, TriangleAlertIcon } from "lucide-react";
 
 import { SortableTableHead } from "@/components/data-table/sortable-table-head";
+import { Duration } from "@/components/duration";
 import { DashboardNavigationIcon } from "@/components/navigation-icons";
 import { QueueActionsMenu, QueuePauseBadge } from "@/components/queues/queue-actions-menu";
 import {
@@ -26,7 +27,6 @@ import {
 } from "@/components/ui/table";
 import { show as queueShow } from "@/generated/routes/horizon-new-dawn/queues";
 import { useSortableRows, type SortColumn } from "@/hooks/use-sortable-rows";
-import { formatDuration } from "@/lib/format-duration";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
 import { isInteractiveTarget } from "@/lib/interactive-target";
 import { cn } from "@/lib/utils";
@@ -214,7 +214,7 @@ function WorkloadRows({
           tone="secondary"
           className={cn("px-6 text-right tabular-nums", grouped && "font-semibold")}
         >
-          {formatDuration(item.wait)}
+          <Duration seconds={item.wait} />
         </TableCell>
         <TableCell tone="secondary" className="pr-6 pl-3 text-right">
           {!grouped ? (
@@ -269,7 +269,7 @@ function WorkloadRows({
               —
             </TableCell>
             <TableCell tone="secondary" className="px-6 text-right tabular-nums">
-              {formatDuration(queue.wait)}
+              <Duration seconds={queue.wait} />
             </TableCell>
             <TableCell tone="secondary" className="pr-6 pl-3 text-right">
               <QueueActionsMenu

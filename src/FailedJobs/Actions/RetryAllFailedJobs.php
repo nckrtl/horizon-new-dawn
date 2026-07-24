@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace NckRtl\HorizonNewDawn\FailedJobs\Actions;
 
-use Illuminate\Support\Collection;
 use Laravel\Horizon\Contracts\JobRepository;
 
 final readonly class RetryAllFailedJobs
@@ -18,18 +17,15 @@ final readonly class RetryAllFailedJobs
 
     public function handle(?string $connection = null, ?string $queue = null): int
     {
-        $afterIndex = -1;
         $scheduled = 0;
         $seen = [];
+        $sourceTotal = max(0, (int) $this->jobs->countFailed());
 
-        while (true) {
-            $chunk = $this->jobs->getFailed((string) $afterIndex);
+        for ($inspected = 0; $inspected < $sourceTotal; $inspected += self::PAGE_SIZE) {
+            $rawPageSize = min(self::PAGE_SIZE, $sourceTotal - $inspected);
+            $chunk = $this->jobs->getFailed((string) ($inspected - 1));
 
-            if ($chunk->isEmpty()) {
-                break;
-            }
-
-            foreach ($chunk as $job) {
+            foreach ($chunk->take($rawPageSize) as $job) {
                 if (! is_object($job) || ! is_string($job->id ?? null) || $job->id === '') {
                     continue;
                 }
@@ -52,28 +48,8 @@ final readonly class RetryAllFailedJobs
                     $scheduled++;
                 }
             }
-
-            if ($chunk->count() < self::PAGE_SIZE) {
-                break;
-            }
-
-            $nextIndex = $this->lastIndex($chunk);
-
-            if ($nextIndex === null || $nextIndex <= $afterIndex) {
-                break;
-            }
-
-            $afterIndex = $nextIndex;
         }
 
         return $scheduled;
-    }
-
-    /** @param Collection<int, mixed> $jobs */
-    private function lastIndex(Collection $jobs): ?int
-    {
-        $last = $jobs->last();
-
-        return is_object($last) && is_numeric($last->index ?? null) ? (int) $last->index : null;
     }
 }

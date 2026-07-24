@@ -7,18 +7,21 @@ export function MonitoringJobFilters({
   queueFilter,
   onJobFilterChange,
   onQueueFilterChange,
+  onClearFilters,
 }: {
   jobs: readonly JobRow[];
   jobFilter: string | null;
   queueFilter: string | null;
   onJobFilterChange: (value: string | null) => void;
   onQueueFilterChange: (value: string | null) => void;
+  onClearFilters: () => void;
 }) {
   return (
     <JobFilters
       jobs={jobs}
       filterKeys={jobFilterKeys("monitoring")}
       values={{ ...emptyJobFilterValues, job: jobFilter, queue: queueFilter }}
+      onClearFilters={onClearFilters}
       onFilterChange={(filterKey, value) => {
         if (filterKey === "job") {
           onJobFilterChange(value);

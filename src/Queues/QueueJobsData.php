@@ -117,10 +117,15 @@ final readonly class QueueJobsData
             return $this->buildSummary($queue);
         }
 
+        $cacheSeconds = intdiv($pollInterval, 1000);
+
+        if ($cacheSeconds === 0) {
+            return $this->buildSummary($queue);
+        }
+
         try {
             $cache = $this->cache->store();
             $cacheKey = $this->cacheKey($queue);
-            $cacheSeconds = (int) ceil($pollInterval / 1000);
             $payload = $this->rememberSummaryPayload($queue, $cacheSeconds);
             $cached = is_array($payload) ? $this->summaryFromPayload($payload) : null;
 

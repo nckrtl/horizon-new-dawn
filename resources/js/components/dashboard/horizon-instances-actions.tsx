@@ -26,11 +26,50 @@ import {
   store as pauseSupervisor,
 } from "@/generated/routes/horizon-new-dawn/supervisors/pause";
 import { resolveHorizonRoute } from "@/lib/horizon-route";
-import type { HorizonStatus } from "@/types/dashboard";
+import type { HorizonDisplayStatus, HorizonTransitionStatus } from "@/types/dashboard";
 
 type HorizonCommand = "continue" | "pause" | "terminate";
 
 const commandRevalidationDelay = 1_100;
+const commandRequestTimeout = 30_000;
+
+type HorizonCommandPayload = {
+  message?: unknown;
+};
+
+async function requestHorizonCommand(
+  route: RouteDefinition<"delete" | "post">,
+  csrfToken: string,
+): Promise<{ payload: HorizonCommandPayload | null; response: Response }> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), commandRequestTimeout);
+
+  try {
+    const response = await fetch(route.url, {
+      method: route.method.toUpperCase(),
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        "X-CSRF-TOKEN": csrfToken,
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      signal: controller.signal,
+    });
+    let payload: HorizonCommandPayload | null = null;
+
+    try {
+      payload = (await response.json()) as HorizonCommandPayload;
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw error;
+      }
+    }
+
+    return { payload, response };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
 
 function useDelayedInstancesRevalidation() {
   const mounted = useRef(true);
@@ -96,18 +135,7 @@ export function HorizonInstancesActions({
     setWorking(action);
 
     try {
-      const response = await fetch(route.url, {
-        method: route.method.toUpperCase(),
-        credentials: "same-origin",
-        headers: {
-          Accept: "application/json",
-          "X-CSRF-TOKEN": csrfToken,
-          "X-Requested-With": "XMLHttpRequest",
-        },
-      });
-      const payload = (await response.json().catch(() => null)) as {
-        message?: unknown;
-      } | null;
+      const { payload, response } = await requestHorizonCommand(route, csrfToken);
       const message = typeof payload?.message === "string" ? payload.message : fallback;
 
       if (!response.ok) {
@@ -185,14 +213,19 @@ export function HorizonInstancesActions({
 export function HorizonInstanceActions({
   horizonBaseUrl,
   instanceName,
+  onTransition,
+  onTransitionFailure,
   status,
+  transitionPending = false,
 }: {
   horizonBaseUrl: string;
   instanceName: string;
-  status: HorizonStatus;
+  onTransition: (transition: HorizonTransitionStatus) => number | null;
+  onTransitionFailure: (token: number) => void;
+  status: HorizonDisplayStatus;
+  transitionPending?: boolean;
 }) {
   const [working, setWorking] = useState<Exclude<HorizonCommand, "terminate"> | null>(null);
-  const revalidateInstances = useDelayedInstancesRevalidation();
 
   const run = async (
     action: Exclude<HorizonCommand, "terminate">,
@@ -208,34 +241,31 @@ export function HorizonInstanceActions({
       return;
     }
 
+    const token = onTransition(action === "pause" ? "pausing" : "continuing");
+
+    if (token === null) {
+      return;
+    }
+
     setWorking(action);
 
     try {
-      const response = await fetch(route.url, {
-        method: route.method.toUpperCase(),
-        credentials: "same-origin",
-        headers: {
-          Accept: "application/json",
-          "X-CSRF-TOKEN": csrfToken,
-          "X-Requested-With": "XMLHttpRequest",
-        },
-      });
-      const payload = (await response.json().catch(() => null)) as {
-        message?: unknown;
-      } | null;
+      const { payload, response } = await requestHorizonCommand(route, csrfToken);
       const message = typeof payload?.message === "string" ? payload.message : fallback;
 
       if (!response.ok) {
         toast.error(message);
+        onTransitionFailure(token);
         setWorking(null);
 
         return;
       }
 
       toast.success(message);
-      revalidateInstances(() => setWorking(null));
+      setWorking(null);
     } catch {
       toast.error(fallback);
+      onTransitionFailure(token);
       setWorking(null);
     }
   };
@@ -248,19 +278,19 @@ export function HorizonInstanceActions({
   return (
     <DropdownMenu>
       <ActionMenuTrigger
-        available={status === "running" || status === "paused"}
+        available={!transitionPending && (status === "running" || status === "paused")}
         label={`Horizon instance ${instanceName} actions`}
         working={working !== null}
         className="text-muted-foreground hover:text-foreground focus-visible:text-foreground aria-expanded:text-foreground"
       />
       <DropdownMenuContent align="end" className="w-44">
         {status === "paused" ? (
-          <DropdownMenuItem onSelect={resume}>
+          <DropdownMenuItem disabled={transitionPending} onSelect={resume}>
             <PlayIcon />
             Continue instance
           </DropdownMenuItem>
         ) : (
-          <DropdownMenuItem disabled={status !== "running"} onSelect={pause}>
+          <DropdownMenuItem disabled={transitionPending || status !== "running"} onSelect={pause}>
             <PauseIcon />
             Pause instance
           </DropdownMenuItem>
@@ -272,15 +302,20 @@ export function HorizonInstanceActions({
 
 export function SupervisorActions({
   horizonBaseUrl,
+  onTransition,
+  onTransitionFailure,
   supervisor,
   status,
+  transitionPending = false,
 }: {
   horizonBaseUrl: string;
+  onTransition: (transition: HorizonTransitionStatus) => number | null;
+  onTransitionFailure: (token: number) => void;
   supervisor: string;
-  status: HorizonStatus;
+  status: HorizonDisplayStatus;
+  transitionPending?: boolean;
 }) {
   const [working, setWorking] = useState<"continue" | "pause" | null>(null);
-  const revalidateInstances = useDelayedInstancesRevalidation();
 
   const run = async (
     action: "continue" | "pause",
@@ -296,34 +331,31 @@ export function SupervisorActions({
       return;
     }
 
+    const token = onTransition(action === "pause" ? "pausing" : "continuing");
+
+    if (token === null) {
+      return;
+    }
+
     setWorking(action);
 
     try {
-      const response = await fetch(route.url, {
-        method: route.method.toUpperCase(),
-        credentials: "same-origin",
-        headers: {
-          Accept: "application/json",
-          "X-CSRF-TOKEN": csrfToken,
-          "X-Requested-With": "XMLHttpRequest",
-        },
-      });
-      const payload = (await response.json().catch(() => null)) as {
-        message?: unknown;
-      } | null;
+      const { payload, response } = await requestHorizonCommand(route, csrfToken);
       const message = typeof payload?.message === "string" ? payload.message : fallback;
 
       if (!response.ok) {
         toast.error(message);
+        onTransitionFailure(token);
         setWorking(null);
 
         return;
       }
 
       toast.success(message);
-      revalidateInstances(() => setWorking(null));
+      setWorking(null);
     } catch {
       toast.error(fallback);
+      onTransitionFailure(token);
       setWorking(null);
     }
   };
@@ -337,19 +369,19 @@ export function SupervisorActions({
   return (
     <DropdownMenu>
       <ActionMenuTrigger
-        available={status === "running" || status === "paused"}
+        available={!transitionPending && (status === "running" || status === "paused")}
         label={`Supervisor ${supervisor} actions`}
         working={working !== null}
         className="text-muted-foreground hover:text-foreground focus-visible:text-foreground aria-expanded:text-foreground"
       />
       <DropdownMenuContent align="end" className="w-48">
         {status === "paused" ? (
-          <DropdownMenuItem onSelect={resume}>
+          <DropdownMenuItem disabled={transitionPending} onSelect={resume}>
             <PlayIcon />
             Continue supervisor
           </DropdownMenuItem>
         ) : (
-          <DropdownMenuItem disabled={status !== "running"} onSelect={pause}>
+          <DropdownMenuItem disabled={transitionPending || status !== "running"} onSelect={pause}>
             <PauseIcon />
             Pause supervisor
           </DropdownMenuItem>

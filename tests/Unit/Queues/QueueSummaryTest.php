@@ -165,6 +165,7 @@ it('combines live queue retained history batches and snapshot metrics', function
     $batch->options['queue'] = 'reports';
     $batchRepository = mockDashboardContract(BatchRepository::class);
     dashboardReturnsFor($batchRepository, 'get', [50, null], [$batch]);
+    dashboardReturnsFor($batchRepository, 'get', [50, 'batch-1'], []);
 
     $metrics = mockDashboardContract(MetricsRepository::class);
     dashboardReturnsFor($metrics, 'throughputForQueue', ['reports'], 4);

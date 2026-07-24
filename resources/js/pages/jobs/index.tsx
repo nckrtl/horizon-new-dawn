@@ -1,5 +1,5 @@
-import { Head, InfiniteScroll } from "@inertiajs/react";
-import { useDeferredValue, useMemo, useState } from "react";
+import { Head, InfiniteScroll, usePage } from "@inertiajs/react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { JobFilters } from "@/components/jobs/job-filters";
 import { JobTable } from "@/components/jobs/job-table";
@@ -10,6 +10,7 @@ import { useAutoLoad } from "@/hooks/use-auto-load";
 import { useJobFilters } from "@/hooks/use-job-filters";
 import { useScheduledJobClock } from "@/hooks/use-scheduled-job-clock";
 import { useAutoLoadPreference } from "@/layouts/horizon-layout";
+import { currentQueryParameter, replaceCurrentQuery } from "@/lib/url-query";
 import type { JobsPageProps } from "@/types/jobs";
 
 function JobsIndex({ horizon, type, pendingCounts, jobs }: JobsPageProps) {
@@ -28,8 +29,11 @@ function JobsIndex({ horizon, type, pendingCounts, jobs }: JobsPageProps) {
 }
 
 function JobsContent({ horizon, type, pendingCounts, jobs }: JobsPageProps) {
+  const page = usePage();
   const [search, setSearch] = useState("");
+  const [hasClientSort, setHasClientSort] = useState(() => currentQueryParameter("sort") !== null);
   const deferredSearch = useDeferredValue(search);
+  const jobItemsRef = useRef<HTMLTableSectionElement>(null);
   const { autoLoad } = useAutoLoadPreference();
   const refreshedJobs = useAutoLoad({
     enabled: autoLoad,
@@ -55,6 +59,7 @@ function JobsContent({ horizon, type, pendingCounts, jobs }: JobsPageProps) {
         .includes(query),
     );
   }, [deferredSearch, jobFilters.filteredJobs]);
+  const visibleJobIds = useMemo(() => new Set(visibleJobs.map((job) => job.id)), [visibleJobs]);
   const hasSearch = search.trim().length > 0;
   const hasFilters = jobFilters.activeFilterCount > 0;
   let emptyDescription: string | undefined;
@@ -66,6 +71,18 @@ function JobsContent({ horizon, type, pendingCounts, jobs }: JobsPageProps) {
   } else if (hasFilters) {
     emptyDescription = "No loaded jobs match the current filters.";
   }
+
+  useEffect(() => {
+    if (
+      !hasClientSort ||
+      currentQueryParameter("sort") === null ||
+      currentQueryParameter("starting_at") === null
+    ) {
+      return;
+    }
+
+    replaceCurrentQuery({ starting_at: null });
+  }, [hasClientSort, page.url]);
 
   return (
     <JobsPage
@@ -81,6 +98,7 @@ function JobsContent({ horizon, type, pendingCounts, jobs }: JobsPageProps) {
           filterKeys={jobFilters.availableFilterKeys}
           values={jobFilters.values}
           onFilterChange={jobFilters.setFilterValue}
+          onClearFilters={jobFilters.clearAllFilters}
           description={`Narrow the loaded ${type} jobs using filters available for this tab.`}
         />
       }
@@ -97,9 +115,17 @@ function JobsContent({ horizon, type, pendingCounts, jobs }: JobsPageProps) {
         ) : null
       }
     >
-      <InfiniteScroll data="jobs" onlyNext buffer={600} loading={<LoadingRows />}>
+      <InfiniteScroll
+        key={`${type}:${jobs.available}`}
+        data="jobs"
+        itemsElement={jobItemsRef}
+        onlyNext
+        preserveUrl={hasClientSort}
+        buffer={600}
+        loading={<LoadingRows />}
+      >
         <JobTable
-          jobs={visibleJobs}
+          jobs={refreshedJobs.items}
           type={type}
           horizonBaseUrl={horizon.baseUrl}
           available={jobs.available}
@@ -108,6 +134,9 @@ function JobsContent({ horizon, type, pendingCounts, jobs }: JobsPageProps) {
           onLoadNewEntries={refreshedJobs.loadNewEntries}
           emptyTitle={hasSearch || hasFilters ? `No matching ${type} jobs` : undefined}
           emptyDescription={emptyDescription}
+          visibleJobIds={visibleJobIds}
+          onSortedChange={setHasClientSort}
+          bodyRef={jobItemsRef}
         />
       </InfiniteScroll>
     </JobsPage>

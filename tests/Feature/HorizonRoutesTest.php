@@ -127,20 +127,44 @@ describe('New Dawn routes', function (): void {
             ->and($retryBatches->parameter('queue'))->toBe('reports/daily');
     });
 
+    it('matches encoded slash-bearing metric and supervisor identifiers', function (): void {
+        $metric = Route::getRoutes()->match(Request::create('/horizon/metrics/jobs/App%5CJobs%5CImport%2FOrders', 'GET'));
+        $supervisorShow = Route::getRoutes()->match(Request::create('/horizon/supervisors/local-host-a1b2%3Aimports%2Fworker', 'GET'));
+        $supervisorPause = Route::getRoutes()->match(Request::create('/horizon/supervisors/local-host-a1b2%3Aimports%2Fworker/pause', 'POST'));
+        $supervisorContinue = Route::getRoutes()->match(Request::create('/horizon/supervisors/local-host-a1b2%3Aimports%2Fworker/pause', 'DELETE'));
+
+        expect($metric->getName())->toBe('horizon-new-dawn.metrics.show')
+            ->and($metric->parameter('slug'))->toBe('App\\Jobs\\Import/Orders')
+            ->and($supervisorShow->getName())->toBe('horizon-new-dawn.supervisors.show')
+            ->and($supervisorShow->parameter('supervisor'))->toBe('local-host-a1b2:imports/worker')
+            ->and($supervisorPause->getName())->toBe('horizon-new-dawn.supervisors.pause.store')
+            ->and($supervisorPause->parameter('supervisor'))->toBe('local-host-a1b2:imports/worker')
+            ->and($supervisorContinue->getName())->toBe('horizon-new-dawn.supervisors.pause.destroy')
+            ->and($supervisorContinue->parameter('supervisor'))->toBe('local-host-a1b2:imports/worker');
+    });
+
     it('constrains route-backed interface states', function (): void {
         $metrics = Route::getRoutes()->getByName('horizon-new-dawn.metrics.index');
+        $metricShow = Route::getRoutes()->getByName('horizon-new-dawn.metrics.show');
         $jobs = Route::getRoutes()->getByName('horizon-new-dawn.jobs.index');
         $monitoring = Route::getRoutes()->getByName('horizon-new-dawn.monitoring.show');
         $monitoringClear = Route::getRoutes()->getByName('horizon-new-dawn.monitoring.jobs.destroy');
         $monitoringRetry = Route::getRoutes()->getByName('horizon-new-dawn.monitoring.retry-failed.store');
         $monitoringStop = Route::getRoutes()->getByName('horizon-new-dawn.monitoring.destroy');
+        $supervisorShow = Route::getRoutes()->getByName('horizon-new-dawn.supervisors.show');
+        $supervisorPause = Route::getRoutes()->getByName('horizon-new-dawn.supervisors.pause.store');
+        $supervisorContinue = Route::getRoutes()->getByName('horizon-new-dawn.supervisors.pause.destroy');
 
         expect($metrics?->wheres['type'] ?? null)->toBe('jobs|queues')
+            ->and($metricShow?->wheres['slug'] ?? null)->toBe('.+')
             ->and($jobs?->wheres['type'] ?? null)->toBe('pending|completed|silenced')
             ->and($monitoring?->wheres['tag'] ?? null)->toBe('.+?')
             ->and($monitoring?->wheres['status'] ?? null)->toBe('jobs|failed')
             ->and($monitoringClear?->wheres['tag'] ?? null)->toBe('.+')
             ->and($monitoringRetry?->wheres['tag'] ?? null)->toBe('.+')
-            ->and($monitoringStop?->wheres['tag'] ?? null)->toBe('.+');
+            ->and($monitoringStop?->wheres['tag'] ?? null)->toBe('.+')
+            ->and($supervisorShow?->wheres['supervisor'] ?? null)->toBe('.+')
+            ->and($supervisorPause?->wheres['supervisor'] ?? null)->toBe('.+?')
+            ->and($supervisorContinue?->wheres['supervisor'] ?? null)->toBe('.+?');
     });
 });
