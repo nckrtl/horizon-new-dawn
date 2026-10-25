@@ -1,0 +1,622 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// Repo-owned Horizon surface detection. Text only: this script never boots PHP config.
+chdir(dirname(__DIR__));
+
+function stop(string $message, int $code = 64): never
+{
+    fwrite(STDERR, $message."\n");
+    exit($code);
+}
+
+/**
+ * @return array{0: int, 1: string, 2: string}
+ */
+function command(array $args): array
+{
+    $out = tmpfile();
+    $err = tmpfile();
+    if ($out === false || $err === false) {
+        stop('Could not capture command output', 70);
+    }
+    $process = proc_open($args, [0 => ['file', '/dev/null', 'r'], 1 => $out, 2 => $err], $pipes);
+    if (! is_resource($process)) {
+        stop('Could not start '.$args[0], 70);
+    }
+    $code = proc_close($process);
+    rewind($out);
+    rewind($err);
+    $text = stream_get_contents($out);
+    $error = stream_get_contents($err);
+    fclose($out);
+    fclose($err);
+
+    return [$code, $text === false ? '' : $text, $error === false ? '' : $error];
+}
+
+/**
+ * @return array{synced_tag: string}
+ */
+function manifest(): array
+{
+    if (! is_file('horizon-sync.json')) {
+        stop('Missing horizon-sync.json. Record a baseline before detection.');
+    }
+    try {
+        $data = json_decode(file_get_contents('horizon-sync.json'), true, 64, JSON_THROW_ON_ERROR);
+    } catch (Throwable) {
+        stop('Cannot read horizon-sync.json', 70);
+    }
+    $tag = is_array($data) ? ($data['synced_tag'] ?? null) : null;
+    if (! is_string($tag) || ! preg_match('/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/D', $tag)) {
+        stop('horizon-sync.json synced_tag must be a stable vX.Y.Z tag');
+    }
+
+    return ['synced_tag' => $tag];
+}
+
+function versionKey(string $tag): string
+{
+    return ltrim($tag, 'v');
+}
+
+/**
+ * @return list<string>
+ */
+function tags(string $remote): array
+{
+    [$code, $text, $error] = command(['git', 'ls-remote', '--tags', $remote]);
+    if ($code !== 0) {
+        stop('Could not list Horizon tags: '.$error, 70);
+    }
+    $found = [];
+    foreach (preg_split("/\R/", trim($text)) ?: [] as $line) {
+        if ($line === '') {
+            continue;
+        }
+        $ref = preg_replace('/\^\{\}$/', '', explode("\t", $line)[1] ?? '');
+        $name = preg_replace('#^refs/tags/#', '', is_string($ref) ? $ref : '');
+        if (is_string($name) && preg_match('/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/D', $name)) {
+            $found[$name] = $name;
+        }
+    }
+    $names = array_values($found);
+    usort($names, fn (string $a, string $b): int => version_compare(versionKey($a), versionKey($b)));
+
+    return $names;
+}
+
+function repository(string $remote): string
+{
+    if (is_dir($remote)) {
+        return $remote;
+    }
+    $dir = sys_get_temp_dir().'/horizon-sync-'.hash('sha256', $remote);
+    if (! is_dir($dir.'/.git')) {
+        [$code, , $error] = command(['git', 'init', $dir]);
+        if ($code !== 0) {
+            stop('Could not prepare Horizon checkout: '.$error, 70);
+        }
+        [$code, , $error] = command(['git', '-C', $dir, 'remote', 'add', 'origin', $remote]);
+        if ($code !== 0) {
+            stop('Could not prepare Horizon checkout: '.$error, 70);
+        }
+    }
+
+    return $dir;
+}
+
+function fetchTag(string $repo, string $remote, string $tag): void
+{
+    if (is_dir($remote)) {
+        return;
+    }
+    [$code, , $error] = command(['git', '-C', $repo, 'fetch', '--depth', '1', 'origin', 'refs/tags/'.$tag.':refs/tags/'.$tag]);
+    if ($code !== 0) {
+        stop('Could not fetch Horizon tag '.$tag.': '.$error, 70);
+    }
+}
+
+function showFile(string $repo, string $tag, string $path): string
+{
+    [$code, $text, $error] = command(['git', '-C', $repo, 'show', $tag.':'.$path]);
+    if ($code === 0) {
+        return $text;
+    }
+    if ($code === 128 && (str_contains($error, 'does not exist') || str_contains($error, 'exists on disk, but not'))) {
+        return '';
+    }
+    stop('Could not read '.$tag.':'.$path.': '.$error, 70);
+}
+
+/**
+ * @return array<string, string>
+ */
+function changedFiles(string $repo, string $from, string $to): array
+{
+    [$code, $text, $error] = command(['git', '-C', $repo, 'diff', '--name-status', '--no-renames', $from, $to, '--', 'routes/web.php', 'config/horizon.php', 'src/Http/Controllers', 'resources/js/screens']);
+    if ($code !== 0) {
+        stop('Could not diff Horizon tags: '.$error, 70);
+    }
+    $files = [];
+    foreach (preg_split("/\R/", trim($text)) ?: [] as $line) {
+        if ($line === '') {
+            continue;
+        }
+        [$status, $path] = array_pad(explode("\t", $line, 2), 2, '');
+        if (! in_array($status, ['A', 'M', 'D'], true) || $path === '') {
+            stop('Unsupported Horizon diff status: '.$line, 70);
+        }
+        $files[$path] = $status;
+    }
+
+    return $files;
+}
+
+/**
+ * @return array<string, string>
+ */
+function routes(string $source): array
+{
+    $result = [];
+    $length = strlen($source);
+    $offset = 0;
+    while (preg_match('/Route::(get|post|put|patch|delete)\b/', $source, $match, PREG_OFFSET_CAPTURE, $offset) === 1) {
+        $method = strtoupper($match[1][0]);
+        $start = $match[0][1];
+        $index = $start;
+        $quote = null;
+        $escaped = false;
+        for (; $index < $length; $index++) {
+            $char = $source[$index];
+            if ($quote !== null) {
+                if ($escaped) {
+                    $escaped = false;
+                } elseif ($char === '\\' && $quote === "'") {
+                    $escaped = true;
+                } elseif ($char === $quote) {
+                    $quote = null;
+                }
+
+                continue;
+            }
+            if ($char === "'" || $char === '"') {
+                $quote = $char;
+
+                continue;
+            }
+            if ($char === ';') {
+                $index++;
+                break;
+            }
+        }
+        $statement = substr($source, $start, $index - $start);
+        if (preg_match("/->name\(\s*'([^']+)'/", $statement, $name) !== 1) {
+            stop('Horizon route has no name', 70);
+        }
+        $result[$method.' '.$name[1]] = preg_replace('/\s+/', ' ', trim($statement)) ?? trim($statement);
+        $offset = $index;
+    }
+
+    return $result;
+}
+
+/**
+ * @return array<string, string>
+ */
+function actions(string $source, string $path): array
+{
+    $class = basename($path, '.php');
+    $result = [];
+    $length = strlen($source);
+    $offset = 0;
+    while (preg_match('/public function (?!__construct\b)([A-Za-z_][A-Za-z0-9_]*)\s*\(/', $source, $match, PREG_OFFSET_CAPTURE, $offset) === 1) {
+        $name = $match[1][0];
+        $start = $match[0][1];
+        $index = strpos($source, '(', $start);
+        if ($index === false) {
+            stop('Horizon controller action has no parameter list: '.$class.'@'.$name, 70);
+        }
+        $depth = 0;
+        for (; $index < $length; $index++) {
+            if ($source[$index] === '(') {
+                $depth++;
+            } elseif ($source[$index] === ')') {
+                $depth--;
+                if ($depth === 0) {
+                    $index++;
+                    break;
+                }
+            }
+        }
+        while ($index < $length && $source[$index] !== '{') {
+            $index++;
+        }
+        if ($index >= $length) {
+            stop('Horizon controller action has no body: '.$class.'@'.$name, 70);
+        }
+        $depth = 0;
+        for (; $index < $length; $index++) {
+            if ($source[$index] === '{') {
+                $depth++;
+            } elseif ($source[$index] === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    $index++;
+                    break;
+                }
+            }
+        }
+        $result[$class.'@'.$name] = substr($source, $start, $index - $start);
+        $offset = $index;
+    }
+
+    return $result;
+}
+
+final class HorizonConfigKeys
+{
+    private int $index = 0;
+
+    private int $length;
+
+    public function __construct(private string $source)
+    {
+        $this->length = strlen($source);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function all(): array
+    {
+        $this->skip();
+        $found = false;
+        while ($this->index < $this->length) {
+            $this->skip();
+            if ($this->startsWith('return')) {
+                $this->index += 6;
+                $this->skip();
+                if ($this->char() === '[') {
+                    $found = true;
+                    break;
+                }
+            }
+            $this->index++;
+        }
+        if (! $found) {
+            stop('Horizon config has no return array', 70);
+        }
+
+        return $this->array('');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function array(string $prefix): array
+    {
+        $this->expect('[');
+        $keys = [];
+        while ($this->index < $this->length) {
+            $this->skip();
+            $char = $this->char();
+            if ($char === ']') {
+                $this->index++;
+                break;
+            }
+            if ($char === ',') {
+                $this->index++;
+
+                continue;
+            }
+            if ($char !== "'" && $char !== '"') {
+                $this->value();
+
+                continue;
+            }
+            $text = $this->string();
+            $this->skip();
+            if (! $this->startsWith('=>')) {
+                continue;
+            }
+            $this->index += 2;
+            $this->skip();
+            if (preg_match('/^\d+$/D', $text) === 1) {
+                if ($this->char() === '[') {
+                    $this->array('');
+                } else {
+                    $this->value();
+                }
+
+                continue;
+            }
+            $path = $prefix === '' ? $text : $prefix.'.'.$text;
+            if ($this->char() === '[') {
+                $start = $this->index;
+                foreach ($this->array($path) as $child => $value) {
+                    $keys[$child] = $value;
+                }
+                $keys[$path] = substr($this->source, $start, $this->index - $start);
+            } else {
+                $start = $this->index;
+                $this->value();
+                $keys[$path] = substr($this->source, $start, $this->index - $start);
+            }
+        }
+
+        return $keys;
+    }
+
+    private function value(): void
+    {
+        $paren = 0;
+        $bracket = 0;
+        $start = $this->index;
+        while ($this->index < $this->length) {
+            $this->skip();
+            $char = $this->char();
+            if ($char === "'" || $char === '"') {
+                $this->string();
+
+                continue;
+            }
+            if ($char === '(') {
+                $paren++;
+                $this->index++;
+
+                continue;
+            }
+            if ($char === ')') {
+                if ($paren === 0 && $bracket === 0) {
+                    return;
+                }
+                $paren--;
+                $this->index++;
+
+                continue;
+            }
+            if ($char === '[') {
+                $bracket++;
+                $this->index++;
+
+                continue;
+            }
+            if ($char === ']') {
+                if ($bracket === 0 && $paren === 0) {
+                    return;
+                }
+                $bracket--;
+                $this->index++;
+
+                continue;
+            }
+            if ($char === ',' && $paren === 0 && $bracket === 0) {
+                return;
+            }
+            $this->index++;
+            if ($this->index > $start + 100000) {
+                stop('Horizon config value is too large', 70);
+            }
+        }
+    }
+
+    private function string(): string
+    {
+        $quote = $this->char();
+        $this->index++;
+        $text = '';
+        while ($this->index < $this->length) {
+            $char = $this->char();
+            $this->index++;
+            if ($char === '\\' && $quote === "'") {
+                $text .= $this->char();
+                $this->index++;
+
+                continue;
+            }
+            if ($char === $quote) {
+                return $text;
+            }
+            $text .= $char;
+        }
+        stop('Horizon config string does not end', 70);
+    }
+
+    private function skip(): void
+    {
+        while ($this->index < $this->length) {
+            $char = $this->char();
+            if ($char === ' ' || $char === "\n" || $char === "\r" || $char === "\t") {
+                $this->index++;
+
+                continue;
+            }
+            if ($this->startsWith('//') || $char === '#') {
+                while ($this->index < $this->length && $this->char() !== "\n") {
+                    $this->index++;
+                }
+
+                continue;
+            }
+            if ($this->startsWith('/*')) {
+                $end = strpos($this->source, '*/', $this->index + 2);
+                if ($end === false) {
+                    stop('Horizon config comment does not end', 70);
+                }
+                $this->index = $end + 2;
+
+                continue;
+            }
+
+            return;
+        }
+    }
+
+    private function expect(string $token): void
+    {
+        $this->skip();
+        if (! $this->startsWith($token)) {
+            stop('Unexpected Horizon config token', 70);
+        }
+        $this->index += strlen($token);
+    }
+
+    private function startsWith(string $token): bool
+    {
+        return substr($this->source, $this->index, strlen($token)) === $token;
+    }
+
+    private function char(): string
+    {
+        return $this->index < $this->length ? $this->source[$this->index] : '';
+    }
+}
+
+/**
+ * @param  array<string, string>  $before
+ * @param  array<string, string>  $after
+ * @return list<array{change: string, id: string}>
+ */
+function diffText(array $before, array $after): array
+{
+    $items = [];
+    foreach ($after as $id => $text) {
+        if (! array_key_exists($id, $before)) {
+            $items[] = ['change' => 'add', 'id' => $id];
+        } elseif ($before[$id] !== $text) {
+            $items[] = ['change' => 'modify', 'id' => $id];
+        }
+    }
+    foreach ($before as $id => $text) {
+        if (! array_key_exists($id, $after)) {
+            $items[] = ['change' => 'delete', 'id' => $id];
+        }
+    }
+    usort($items, fn (array $a, array $b): int => $a['id'] <=> $b['id']);
+
+    return $items;
+}
+
+/**
+ * @param  array<string, string>  $before
+ * @param  array<string, string>  $after
+ * @return list<array{change: string, id: string}>
+ */
+function diffConfig(array $before, array $after): array
+{
+    $changes = [];
+    foreach ($after as $path => $text) {
+        if (! array_key_exists($path, $before)) {
+            $changes[$path] = 'add';
+        } elseif ($before[$path] !== $text) {
+            $changes[$path] = 'modify';
+        }
+    }
+    foreach ($before as $path => $text) {
+        if (! array_key_exists($path, $after)) {
+            $changes[$path] = 'delete';
+        }
+    }
+    $keep = [];
+    foreach ($changes as $path => $change) {
+        $drop = false;
+        foreach ($changes as $other => $otherChange) {
+            if ($other !== $path && str_starts_with($other, $path.'.') && $change === 'modify') {
+                $drop = true;
+            }
+            if ($other !== $path && str_starts_with($path, $other.'.') && in_array($otherChange, ['add', 'delete'], true)) {
+                $drop = true;
+            }
+        }
+        if (! $drop) {
+            $keep[] = ['change' => $change, 'id' => $path];
+        }
+    }
+    usort($keep, fn (array $a, array $b): int => $a['id'] <=> $b['id']);
+
+    return $keep;
+}
+
+/**
+ * @param  array<string, string>  $files
+ * @return list<array{change: string, id: string, surface: string}>
+ */
+function candidates(string $repo, string $from, string $to, array $files): array
+{
+    $items = [];
+    $routeFile = 'routes/web.php';
+    if (isset($files[$routeFile])) {
+        foreach (diffText(routes(showFile($repo, $from, $routeFile)), routes(showFile($repo, $to, $routeFile))) as $item) {
+            $items[] = ['surface' => 'route', ...$item];
+        }
+    }
+    $controllerFiles = array_filter($files, fn (string $status, string $path): bool => str_starts_with($path, 'src/Http/Controllers/') && str_ends_with($path, '.php'), ARRAY_FILTER_USE_BOTH);
+    ksort($controllerFiles);
+    foreach ($controllerFiles as $path => $status) {
+        $before = $status === 'A' ? [] : actions(showFile($repo, $from, $path), $path);
+        $after = $status === 'D' ? [] : actions(showFile($repo, $to, $path), $path);
+        foreach (diffText($before, $after) as $item) {
+            $items[] = ['surface' => 'controller', ...$item];
+        }
+    }
+    foreach ($files as $path => $status) {
+        if (str_starts_with($path, 'resources/js/screens/') && str_ends_with($path, '.vue')) {
+            $change = match ($status) {
+                'A' => 'add',
+                'D' => 'delete',
+                'M' => 'modify',
+            };
+            $items[] = ['surface' => 'screen', 'change' => $change, 'id' => $path];
+        }
+    }
+    $config = 'config/horizon.php';
+    if (isset($files[$config])) {
+        $before = (new HorizonConfigKeys(showFile($repo, $from, $config)))->all();
+        $after = (new HorizonConfigKeys(showFile($repo, $to, $config)))->all();
+        foreach (diffConfig($before, $after) as $item) {
+            $items[] = ['surface' => 'config', ...$item];
+        }
+    }
+    $order = ['route' => 0, 'controller' => 1, 'screen' => 2, 'config' => 3];
+    usort($items, fn (array $a, array $b): int => [$order[$a['surface']], $a['id']] <=> [$order[$b['surface']], $b['id']]);
+
+    return $items;
+}
+
+$mode = $argv[1] ?? '';
+if ($mode !== 'detect' || $argc !== 2) {
+    stop('Usage: scripts/horizon-sync detect');
+}
+
+$synced = manifest()['synced_tag'];
+$remote = getenv('HORIZON_SYNC_REMOTE');
+if (! is_string($remote) || $remote === '') {
+    $remote = 'https://github.com/laravel/horizon.git';
+}
+$names = tags($remote);
+if (! in_array($synced, $names, true)) {
+    stop('Synced tag '.$synced.' is not a Horizon tag', 70);
+}
+$next = null;
+foreach ($names as $name) {
+    if (version_compare(versionKey($name), versionKey($synced), '>')) {
+        $next = $name;
+        break;
+    }
+}
+if ($next === null) {
+    echo json_encode(['schema' => 1, 'synced_tag' => $synced, 'tag' => null, 'candidates' => []], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n";
+    exit(0);
+}
+$repo = repository($remote);
+fetchTag($repo, $remote, $synced);
+fetchTag($repo, $remote, $next);
+$found = candidates($repo, $synced, $next, changedFiles($repo, $synced, $next));
+$rows = $found === []
+    ? [['kind' => 'release', 'tag' => $next, 'surface' => null, 'change' => null, 'id' => $next]]
+    : array_map(fn (array $item): array => ['kind' => 'feature', 'tag' => $next, ...$item], $found);
+echo json_encode(['schema' => 1, 'synced_tag' => $synced, 'tag' => $next, 'candidates' => $rows], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n";
