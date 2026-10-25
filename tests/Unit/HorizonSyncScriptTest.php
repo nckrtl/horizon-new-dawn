@@ -137,7 +137,7 @@ function withSyncCase(callable $callback): void
     try {
         $callback(new HorizonSyncCase($directory, $project, $remote));
     } finally {
-        new Process(['rm', '-rf', '--', $directory])->mustRun();
+        (new Process(['rm', '-rf', '--', $directory]))->mustRun();
     }
 }
 
