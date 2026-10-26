@@ -235,7 +235,9 @@ final class ReleaseDelayedJobRedisQueue extends RedisQueue
 
     public function getQueue($queue): string
     {
-        return 'queues:'.($queue ?: 'default');
+        $name = \Illuminate\Support\enum_value($queue);
+
+        return 'queues:'.(is_string($name) && $name !== '' ? $name : 'default');
     }
 
     /** @return array<int, string> */

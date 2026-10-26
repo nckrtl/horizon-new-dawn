@@ -148,18 +148,23 @@ function dashboardReturnsFor(
     string $method,
     array $arguments,
     mixed $value,
+    ?int $atMost = null,
 ): void {
     $expectation = $mock->shouldReceive($method);
 
     if ($expectation instanceof Expectation) {
-        $expectation->with(...$arguments)->once()->andReturn($value);
+        $configured = $expectation->with(...$arguments);
+        $atMost === null ? $configured->once() : $configured->between(1, $atMost);
+        $configured->andReturn($value);
 
         return;
     }
 
     if ($expectation instanceof CompositeExpectation) {
         $expectation->__call('with', $arguments);
-        $expectation->__call('once', []);
+        $atMost === null
+            ? $expectation->__call('once', [])
+            : $expectation->__call('between', [1, $atMost]);
         $expectation->andReturn($value);
 
         return;

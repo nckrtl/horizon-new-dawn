@@ -25,7 +25,8 @@ afterEach(function (): void {
 it('cancels an active batch through the Laravel batch contract', function (): void {
     $batches = mockDashboardContract(BatchRepository::class);
     $batch = horizonBatch('batch-1', pendingJobs: 4, repository: $batches);
-    dashboardReturnsFor($batches, 'find', ['batch-1'], $batch);
+    // Laravel 13.38 refreshes the batch when it dispatches BatchCanceled.
+    dashboardReturnsFor($batches, 'find', ['batch-1'], $batch, 2);
     dashboardReturnsFor($batches, 'cancel', ['batch-1'], null);
     app()->instance(BatchRepository::class, $batches);
 

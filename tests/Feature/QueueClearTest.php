@@ -37,7 +37,8 @@ it('clears a queue through the framework then purges connection-scoped Horizon r
         public function clear($queue = null): int
         {
             $this->trace->push('clear');
-            $this->clearedQueue = $queue;
+            $name = \Illuminate\Support\enum_value($queue);
+            $this->clearedQueue = is_string($name) ? $name : null;
 
             return 12;
         }
