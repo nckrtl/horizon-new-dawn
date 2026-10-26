@@ -15,6 +15,42 @@ it('fails clearly before reading Horizon when the baseline manifest is missing',
     });
 });
 
+it('records covered Horizon features with readable names', function (): void {
+    $manifest = json_decode((string) file_get_contents(dirname(__DIR__, 2).'/horizon-sync.json'), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($manifest['synced_tag'])->toBe('v5.50.1')
+        ->and(array_key_exists('surface', $manifest))->toBeFalse()
+        ->and(array_count_values(array_column($manifest['covered'], 'kind')))->toBe([
+            'route' => 21,
+            'controller' => 21,
+            'screen' => 16,
+            'config' => 12,
+        ])
+        ->and($manifest['covered'])->toContain([
+            'kind' => 'screen',
+            'upstream' => 'resources/js/screens/batches/index.vue',
+            'covered_by' => 'resources/js/pages/batches/index.tsx',
+        ]);
+
+    foreach ($manifest['covered'] as $entry) {
+        expect(array_keys($entry))->toEqualCanonicalizing(['kind', 'upstream', 'covered_by'])
+            ->and($entry['kind'])->toBeIn(['route', 'controller', 'screen', 'config'])
+            ->and($entry['upstream'])->not->toBe('')
+            ->and($entry['covered_by'])->not->toBe('');
+    }
+});
+
+it('rejects the old surface list before reading Horizon', function (): void {
+    withSyncCase(function (HorizonSyncCase $case): void {
+        file_put_contents($case->project.'/horizon-sync.json', '{"synced_tag":"v5.50.1","surface":[]}');
+        $result = runHorizonSync($case->project, $case->remote);
+
+        expect($result->getExitCode())->toBe(64)
+            ->and($result->getErrorOutput())->toContain('lists covered features under covered, not surface')
+            ->and($result->getOutput())->toBe('');
+    });
+});
+
 it('rejects a non-detect invocation without creating a manifest', function (): void {
     withSyncCase(function (HorizonSyncCase $case): void {
         file_put_contents($case->project.'/horizon-sync.json', '{"synced_tag":"v5.50.1"}');
@@ -41,7 +77,14 @@ it('reports no candidate when the synced tag is already the newest stable tag', 
     withSyncCase(function (HorizonSyncCase $case): void {
         tagHorizonSnapshot($case->remote, 'v5.50.0', 'release/v5.50.0');
         tagHorizonSnapshot($case->remote, 'v5.50.1', 'release/v5.50.1');
-        writeSyncTag($case->project, 'v5.50.1');
+        file_put_contents($case->project.'/horizon-sync.json', json_encode([
+            'synced_tag' => 'v5.50.1',
+            'covered' => [[
+                'kind' => 'route',
+                'upstream' => 'GET horizon.completed-jobs.index',
+                'covered_by' => 'src/Http/Controllers/JobController.php',
+            ]],
+        ], JSON_THROW_ON_ERROR));
 
         expect(syncCandidates($case->project, $case->remote))->toBe([
             'schema' => 1,

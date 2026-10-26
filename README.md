@@ -415,17 +415,22 @@ classes. PHP deserialization may invoke lifecycle methods such as `__wakeup`
 and `__destruct`, so allow only side-effect-free classes controlled by the
 application.
 
-## Upstream Horizon sync
+## How to read horizon-sync.json
 
-`horizon-sync.json` records the Horizon release this package is verified against and the upstream surface it already implements. `synced_tag` is `v5.50.1`, the newest `laravel/horizon` tag for which `composer test:compatibility` passed. The `surface` list contains only routes, controller actions, Vue screens, and config keys this package covers. Each entry names the package file that covers it. Upstream items this package does not implement are omitted; a later detection run reports them as candidates.
+This file says where Horizon New Dawn stands against Laravel Horizon. `synced_tag` is the last Horizon release we have caught up with (`v5.50.1`). `covered` is the list of upstream Horizon features this package already implements. Horizon features that are not in the list are not claimed.
 
-Detect the next upstream tag. The command prints JSON and does not change the package:
+| kind | What it is | Example |
+| --- | --- | --- |
+| `route` | A named HTTP route Horizon registers | `upstream` is `GET horizon.completed-jobs.index`. `covered_by` is `src/Http/Controllers/JobController.php`. |
+| `controller` | One action on a Horizon controller | `upstream` is `BatchesController@index`. `covered_by` is `src/Http/Controllers/BatchController.php`. |
+| `screen` | One screen in Horizon's own dashboard | `upstream` is `resources/js/screens/batches/index.vue`. `covered_by` is `resources/js/pages/batches/index.tsx`. |
+| `config` | One key in Horizon's `config/horizon.php` | `upstream` is `domain`. `covered_by` is `src/HorizonNewDawnServiceProvider.php`. |
 
-```bash
-php scripts/horizon-sync detect
-```
+`kind` is one of those four. `upstream` is Horizon's name for the feature. `covered_by` is the file in this package that implements it. Screen paths that end in `.vue` are Horizon's Vue dashboard screens. `covered_by` points at our React page, so the two paths are different files.
 
-It reads `horizon-sync.json`, lists tags from `https://github.com/laravel/horizon.git`, and text-diffs only the next newer tag. Set `HORIZON_SYNC_REMOTE` to a local Horizon checkout when you do not want a network fetch.
+When Horizon publishes a release newer than `synced_tag`, run `php scripts/horizon-sync detect`. The command looks only at the next tag. It prints one candidate for each route, controller, screen, or config key that tag changes. If the tag changes none of those files, it prints one release candidate. It does not edit `horizon-sync.json`. After this package implements that change, move `synced_tag` forward and add the new rows to `covered`.
+
+Set `HORIZON_SYNC_REMOTE` to a local Horizon checkout when you do not want a network fetch.
 
 ## Development
 
