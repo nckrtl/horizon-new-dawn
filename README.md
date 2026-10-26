@@ -415,6 +415,18 @@ classes. PHP deserialization may invoke lifecycle methods such as `__wakeup`
 and `__destruct`, so allow only side-effect-free classes controlled by the
 application.
 
+## Upstream Horizon sync
+
+`horizon-sync.json` records the Horizon release this package is verified against and the upstream surface it already implements. `synced_tag` is `v5.50.1`, the newest `laravel/horizon` tag for which `composer test:compatibility` passed. The `surface` list contains only routes, controller actions, Vue screens, and config keys this package covers. Each entry names the package file that covers it. Upstream items this package does not implement are omitted; a later detection run reports them as candidates.
+
+Detect the next upstream tag. The command prints JSON and does not change the package:
+
+```bash
+php scripts/horizon-sync detect
+```
+
+It reads `horizon-sync.json`, lists tags from `https://github.com/laravel/horizon.git`, and text-diffs only the next newer tag. Set `HORIZON_SYNC_REMOTE` to a local Horizon checkout when you do not want a network fetch.
+
 ## Development
 
 ```bash
