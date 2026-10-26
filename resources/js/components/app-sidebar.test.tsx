@@ -122,9 +122,9 @@ describe("AppSidebar", () => {
       </TooltipProvider>,
     );
 
-    expect(screen.getByRole("link", { name: "Dashboard" }).parentElement).not.toHaveTextContent(
-      /\d/,
-    );
+    expect(
+      screen.getByRole("link", { name: "Dashboard" }).parentElement?.textContent ?? "",
+    ).not.toMatch(/\d/);
     [1, 2, 7, 8, 4, 50].forEach((count) => {
       const counter = screen.getByText(String(count));
 

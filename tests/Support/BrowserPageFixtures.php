@@ -722,7 +722,9 @@ final class BrowserPendingJobRedisQueue extends RedisQueue
 
     public function getQueueRedisKey($queue = null): string
     {
-        return 'queues:'.($queue ?: 'default');
+        $name = \Illuminate\Support\enum_value($queue);
+
+        return 'queues:'.(is_string($name) && $name !== '' ? $name : 'default');
     }
 }
 
