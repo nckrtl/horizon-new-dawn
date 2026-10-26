@@ -1,1 +1,0 @@
-import{Ti as e}from"./horizon-layout-VWspSVlW.js";function t(t){e.getCached(t)===null&&e.prefetch(t)}function n(t){e.visit(t)}export{n,t};
