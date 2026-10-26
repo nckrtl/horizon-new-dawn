@@ -3,7 +3,7 @@
 
 declare(strict_types=1);
 
-// Repo-owned Horizon surface detection. Text only: this script never boots PHP config.
+// Reports the next Horizon release after synced_tag. Text only: this script never boots PHP.
 chdir(dirname(__DIR__));
 
 function stop(string $message, int $code = 64): never
@@ -50,12 +50,44 @@ function manifest(): array
     } catch (Throwable) {
         stop('Cannot read horizon-sync.json', 70);
     }
-    $tag = is_array($data) ? ($data['synced_tag'] ?? null) : null;
+    if (! is_array($data)) {
+        stop('Cannot read horizon-sync.json', 70);
+    }
+    if (array_key_exists('surface', $data)) {
+        stop('horizon-sync.json lists covered features under covered, not surface');
+    }
+    $tag = $data['synced_tag'] ?? null;
     if (! is_string($tag) || ! preg_match('/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/D', $tag)) {
         stop('horizon-sync.json synced_tag must be a stable vX.Y.Z tag');
     }
+    if (array_key_exists('covered', $data)) {
+        readCovered($data['covered']);
+    }
 
     return ['synced_tag' => $tag];
+}
+
+function readCovered(mixed $entries): void
+{
+    if (! is_array($entries) || ! array_is_list($entries)) {
+        stop('horizon-sync.json covered must be a list');
+    }
+    foreach ($entries as $entry) {
+        if (! is_array($entry)) {
+            stop('Each covered feature needs kind, upstream, and covered_by');
+        }
+        $keys = array_keys($entry);
+        sort($keys);
+        $kind = $entry['kind'] ?? null;
+        $upstream = $entry['upstream'] ?? null;
+        $coveredBy = $entry['covered_by'] ?? null;
+        if ($keys !== ['covered_by', 'kind', 'upstream']
+            || ! in_array($kind, ['route', 'controller', 'screen', 'config'], true)
+            || ! is_string($upstream) || $upstream === ''
+            || ! is_string($coveredBy) || $coveredBy === '') {
+            stop('Each covered feature needs kind, upstream, and covered_by');
+        }
+    }
 }
 
 function versionKey(string $tag): string
@@ -616,6 +648,8 @@ $repo = repository($remote);
 fetchTag($repo, $remote, $synced);
 fetchTag($repo, $remote, $next);
 $found = candidates($repo, $synced, $next, changedFiles($repo, $synced, $next));
+// Candidate kind is release or feature. surface is route, controller, screen, or config.
+// id is the upstream Horizon name, the same value as covered[].upstream.
 $rows = $found === []
     ? [['kind' => 'release', 'tag' => $next, 'surface' => null, 'change' => null, 'id' => $next]]
     : array_map(fn (array $item): array => ['kind' => 'feature', 'tag' => $next, ...$item], $found);

@@ -1,355 +1,355 @@
 {
   "synced_tag": "v5.50.1",
-  "surface": [
+  "covered": [
     {
-      "surface": "route",
-      "id": "DELETE horizon.monitoring-tag.destroy",
-      "evidence": "src/Http/Controllers/MonitoringController.php"
+      "kind": "route",
+      "upstream": "DELETE horizon.monitoring-tag.destroy",
+      "covered_by": "src/Http/Controllers/MonitoringController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.completed-jobs.index",
-      "evidence": "src/Http/Controllers/JobController.php"
+      "kind": "route",
+      "upstream": "GET horizon.completed-jobs.index",
+      "covered_by": "src/Http/Controllers/JobController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.failed-jobs.index",
-      "evidence": "src/Http/Controllers/FailedJobController.php"
+      "kind": "route",
+      "upstream": "GET horizon.failed-jobs.index",
+      "covered_by": "src/Http/Controllers/FailedJobController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.failed-jobs.show",
-      "evidence": "src/Http/Controllers/FailedJobController.php"
+      "kind": "route",
+      "upstream": "GET horizon.failed-jobs.show",
+      "covered_by": "src/Http/Controllers/FailedJobController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.jobs-batches.index",
-      "evidence": "src/Http/Controllers/BatchController.php"
+      "kind": "route",
+      "upstream": "GET horizon.jobs-batches.index",
+      "covered_by": "src/Http/Controllers/BatchController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.jobs-batches.show",
-      "evidence": "src/Http/Controllers/BatchController.php"
+      "kind": "route",
+      "upstream": "GET horizon.jobs-batches.show",
+      "covered_by": "src/Http/Controllers/BatchController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.jobs-metrics.index",
-      "evidence": "src/Http/Controllers/MetricsController.php"
+      "kind": "route",
+      "upstream": "GET horizon.jobs-metrics.index",
+      "covered_by": "src/Http/Controllers/MetricsController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.jobs-metrics.show",
-      "evidence": "src/Http/Controllers/MetricController.php"
+      "kind": "route",
+      "upstream": "GET horizon.jobs-metrics.show",
+      "covered_by": "src/Http/Controllers/MetricController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.jobs.show",
-      "evidence": "src/Http/Controllers/JobController.php"
+      "kind": "route",
+      "upstream": "GET horizon.jobs.show",
+      "covered_by": "src/Http/Controllers/JobController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.masters.index",
-      "evidence": "src/Http/Controllers/RunningInstanceController.php"
+      "kind": "route",
+      "upstream": "GET horizon.masters.index",
+      "covered_by": "src/Http/Controllers/RunningInstanceController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.monitoring-tag.paginate",
-      "evidence": "src/Http/Controllers/MonitoringTagController.php"
+      "kind": "route",
+      "upstream": "GET horizon.monitoring-tag.paginate",
+      "covered_by": "src/Http/Controllers/MonitoringTagController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.monitoring.index",
-      "evidence": "src/Http/Controllers/MonitoringController.php"
+      "kind": "route",
+      "upstream": "GET horizon.monitoring.index",
+      "covered_by": "src/Http/Controllers/MonitoringController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.pending-jobs.index",
-      "evidence": "src/Http/Controllers/JobController.php"
+      "kind": "route",
+      "upstream": "GET horizon.pending-jobs.index",
+      "covered_by": "src/Http/Controllers/JobController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.queues-metrics.index",
-      "evidence": "src/Http/Controllers/MetricsController.php"
+      "kind": "route",
+      "upstream": "GET horizon.queues-metrics.index",
+      "covered_by": "src/Http/Controllers/MetricsController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.queues-metrics.show",
-      "evidence": "src/Http/Controllers/MetricController.php"
+      "kind": "route",
+      "upstream": "GET horizon.queues-metrics.show",
+      "covered_by": "src/Http/Controllers/MetricController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.silenced-jobs.index",
-      "evidence": "src/Http/Controllers/JobController.php"
+      "kind": "route",
+      "upstream": "GET horizon.silenced-jobs.index",
+      "covered_by": "src/Http/Controllers/JobController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.stats.index",
-      "evidence": "src/Http/Controllers/DashboardController.php"
+      "kind": "route",
+      "upstream": "GET horizon.stats.index",
+      "covered_by": "src/Http/Controllers/DashboardController.php"
     },
     {
-      "surface": "route",
-      "id": "GET horizon.workload.index",
-      "evidence": "src/Http/Controllers/DashboardController.php"
+      "kind": "route",
+      "upstream": "GET horizon.workload.index",
+      "covered_by": "src/Http/Controllers/DashboardController.php"
     },
     {
-      "surface": "route",
-      "id": "POST horizon.jobs-batches.retry",
-      "evidence": "src/Http/Controllers/BatchRetryController.php"
+      "kind": "route",
+      "upstream": "POST horizon.jobs-batches.retry",
+      "covered_by": "src/Http/Controllers/BatchRetryController.php"
     },
     {
-      "surface": "route",
-      "id": "POST horizon.monitoring.store",
-      "evidence": "src/Http/Controllers/MonitoringController.php"
+      "kind": "route",
+      "upstream": "POST horizon.monitoring.store",
+      "covered_by": "src/Http/Controllers/MonitoringController.php"
     },
     {
-      "surface": "route",
-      "id": "POST horizon.retry-jobs.show",
-      "evidence": "src/Http/Controllers/FailedJobRetryController.php"
+      "kind": "route",
+      "upstream": "POST horizon.retry-jobs.show",
+      "covered_by": "src/Http/Controllers/FailedJobRetryController.php"
     },
     {
-      "surface": "controller",
-      "id": "BatchesController@index",
-      "evidence": "src/Http/Controllers/BatchController.php"
+      "kind": "controller",
+      "upstream": "BatchesController@index",
+      "covered_by": "src/Http/Controllers/BatchController.php"
     },
     {
-      "surface": "controller",
-      "id": "BatchesController@retry",
-      "evidence": "src/Http/Controllers/BatchRetryController.php"
+      "kind": "controller",
+      "upstream": "BatchesController@retry",
+      "covered_by": "src/Http/Controllers/BatchRetryController.php"
     },
     {
-      "surface": "controller",
-      "id": "BatchesController@show",
-      "evidence": "src/Http/Controllers/BatchController.php"
+      "kind": "controller",
+      "upstream": "BatchesController@show",
+      "covered_by": "src/Http/Controllers/BatchController.php"
     },
     {
-      "surface": "controller",
-      "id": "CompletedJobsController@index",
-      "evidence": "src/Http/Controllers/JobController.php"
+      "kind": "controller",
+      "upstream": "CompletedJobsController@index",
+      "covered_by": "src/Http/Controllers/JobController.php"
     },
     {
-      "surface": "controller",
-      "id": "DashboardStatsController@index",
-      "evidence": "src/Http/Controllers/DashboardController.php"
+      "kind": "controller",
+      "upstream": "DashboardStatsController@index",
+      "covered_by": "src/Http/Controllers/DashboardController.php"
     },
     {
-      "surface": "controller",
-      "id": "FailedJobsController@index",
-      "evidence": "src/Http/Controllers/FailedJobController.php"
+      "kind": "controller",
+      "upstream": "FailedJobsController@index",
+      "covered_by": "src/Http/Controllers/FailedJobController.php"
     },
     {
-      "surface": "controller",
-      "id": "FailedJobsController@show",
-      "evidence": "src/Http/Controllers/FailedJobController.php"
+      "kind": "controller",
+      "upstream": "FailedJobsController@show",
+      "covered_by": "src/Http/Controllers/FailedJobController.php"
     },
     {
-      "surface": "controller",
-      "id": "JobMetricsController@index",
-      "evidence": "src/Http/Controllers/MetricsController.php"
+      "kind": "controller",
+      "upstream": "JobMetricsController@index",
+      "covered_by": "src/Http/Controllers/MetricsController.php"
     },
     {
-      "surface": "controller",
-      "id": "JobMetricsController@show",
-      "evidence": "src/Http/Controllers/MetricController.php"
+      "kind": "controller",
+      "upstream": "JobMetricsController@show",
+      "covered_by": "src/Http/Controllers/MetricController.php"
     },
     {
-      "surface": "controller",
-      "id": "JobsController@show",
-      "evidence": "src/Http/Controllers/JobController.php"
+      "kind": "controller",
+      "upstream": "JobsController@show",
+      "covered_by": "src/Http/Controllers/JobController.php"
     },
     {
-      "surface": "controller",
-      "id": "MasterSupervisorController@index",
-      "evidence": "src/Http/Controllers/RunningInstanceController.php"
+      "kind": "controller",
+      "upstream": "MasterSupervisorController@index",
+      "covered_by": "src/Http/Controllers/RunningInstanceController.php"
     },
     {
-      "surface": "controller",
-      "id": "MonitoringController@destroy",
-      "evidence": "src/Http/Controllers/MonitoringController.php"
+      "kind": "controller",
+      "upstream": "MonitoringController@destroy",
+      "covered_by": "src/Http/Controllers/MonitoringController.php"
     },
     {
-      "surface": "controller",
-      "id": "MonitoringController@index",
-      "evidence": "src/Http/Controllers/MonitoringController.php"
+      "kind": "controller",
+      "upstream": "MonitoringController@index",
+      "covered_by": "src/Http/Controllers/MonitoringController.php"
     },
     {
-      "surface": "controller",
-      "id": "MonitoringController@paginate",
-      "evidence": "src/Http/Controllers/MonitoringTagController.php"
+      "kind": "controller",
+      "upstream": "MonitoringController@paginate",
+      "covered_by": "src/Http/Controllers/MonitoringTagController.php"
     },
     {
-      "surface": "controller",
-      "id": "MonitoringController@store",
-      "evidence": "src/Http/Controllers/MonitoringController.php"
+      "kind": "controller",
+      "upstream": "MonitoringController@store",
+      "covered_by": "src/Http/Controllers/MonitoringController.php"
     },
     {
-      "surface": "controller",
-      "id": "PendingJobsController@index",
-      "evidence": "src/Http/Controllers/JobController.php"
+      "kind": "controller",
+      "upstream": "PendingJobsController@index",
+      "covered_by": "src/Http/Controllers/JobController.php"
     },
     {
-      "surface": "controller",
-      "id": "QueueMetricsController@index",
-      "evidence": "src/Http/Controllers/MetricsController.php"
+      "kind": "controller",
+      "upstream": "QueueMetricsController@index",
+      "covered_by": "src/Http/Controllers/MetricsController.php"
     },
     {
-      "surface": "controller",
-      "id": "QueueMetricsController@show",
-      "evidence": "src/Http/Controllers/MetricController.php"
+      "kind": "controller",
+      "upstream": "QueueMetricsController@show",
+      "covered_by": "src/Http/Controllers/MetricController.php"
     },
     {
-      "surface": "controller",
-      "id": "RetryController@store",
-      "evidence": "src/Http/Controllers/FailedJobRetryController.php"
+      "kind": "controller",
+      "upstream": "RetryController@store",
+      "covered_by": "src/Http/Controllers/FailedJobRetryController.php"
     },
     {
-      "surface": "controller",
-      "id": "SilencedJobsController@index",
-      "evidence": "src/Http/Controllers/JobController.php"
+      "kind": "controller",
+      "upstream": "SilencedJobsController@index",
+      "covered_by": "src/Http/Controllers/JobController.php"
     },
     {
-      "surface": "controller",
-      "id": "WorkloadController@index",
-      "evidence": "src/Http/Controllers/DashboardController.php"
+      "kind": "controller",
+      "upstream": "WorkloadController@index",
+      "covered_by": "src/Http/Controllers/DashboardController.php"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/batches/index.vue",
-      "evidence": "resources/js/pages/batches/index.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/batches/index.vue",
+      "covered_by": "resources/js/pages/batches/index.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/batches/preview.vue",
-      "evidence": "resources/js/pages/batches/show.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/batches/preview.vue",
+      "covered_by": "resources/js/pages/batches/show.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/dashboard.vue",
-      "evidence": "resources/js/pages/dashboard.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/dashboard.vue",
+      "covered_by": "resources/js/pages/dashboard.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/failedJobs/index.vue",
-      "evidence": "resources/js/pages/failed-jobs/index.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/failedJobs/index.vue",
+      "covered_by": "resources/js/pages/failed-jobs/index.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/failedJobs/job.vue",
-      "evidence": "resources/js/pages/failed-jobs/show.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/failedJobs/job.vue",
+      "covered_by": "resources/js/pages/failed-jobs/show.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/metrics/index.vue",
-      "evidence": "resources/js/pages/metrics/index.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/metrics/index.vue",
+      "covered_by": "resources/js/pages/metrics/index.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/metrics/jobs.vue",
-      "evidence": "resources/js/pages/metrics/index.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/metrics/jobs.vue",
+      "covered_by": "resources/js/pages/metrics/index.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/metrics/preview.vue",
-      "evidence": "resources/js/pages/metrics/show.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/metrics/preview.vue",
+      "covered_by": "resources/js/pages/metrics/show.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/metrics/queues.vue",
-      "evidence": "resources/js/pages/metrics/index.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/metrics/queues.vue",
+      "covered_by": "resources/js/pages/metrics/index.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/monitoring/index.vue",
-      "evidence": "resources/js/pages/monitoring/index.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/monitoring/index.vue",
+      "covered_by": "resources/js/pages/monitoring/index.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/monitoring/job-row.vue",
-      "evidence": "resources/js/components/monitoring/monitoring-job-table.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/monitoring/job-row.vue",
+      "covered_by": "resources/js/components/monitoring/monitoring-job-table.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/monitoring/tag-jobs.vue",
-      "evidence": "resources/js/pages/monitoring/show.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/monitoring/tag-jobs.vue",
+      "covered_by": "resources/js/pages/monitoring/show.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/monitoring/tag.vue",
-      "evidence": "resources/js/pages/monitoring/show.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/monitoring/tag.vue",
+      "covered_by": "resources/js/pages/monitoring/show.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/recentJobs/index.vue",
-      "evidence": "resources/js/pages/jobs/index.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/recentJobs/index.vue",
+      "covered_by": "resources/js/pages/jobs/index.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/recentJobs/job-row.vue",
-      "evidence": "resources/js/components/jobs/job-row.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/recentJobs/job-row.vue",
+      "covered_by": "resources/js/components/jobs/job-row.tsx"
     },
     {
-      "surface": "screen",
-      "id": "resources/js/screens/recentJobs/job.vue",
-      "evidence": "resources/js/pages/jobs/show.tsx"
+      "kind": "screen",
+      "upstream": "resources/js/screens/recentJobs/job.vue",
+      "covered_by": "resources/js/pages/jobs/show.tsx"
     },
     {
-      "surface": "config",
-      "id": "domain",
-      "evidence": "src/HorizonNewDawnServiceProvider.php"
+      "kind": "config",
+      "upstream": "domain",
+      "covered_by": "src/HorizonNewDawnServiceProvider.php"
     },
     {
-      "surface": "config",
-      "id": "fast_termination",
-      "evidence": "src/Instances/Actions/TerminateHorizon.php"
+      "kind": "config",
+      "upstream": "fast_termination",
+      "covered_by": "src/Instances/Actions/TerminateHorizon.php"
     },
     {
-      "surface": "config",
-      "id": "path",
-      "evidence": "src/HorizonNewDawnServiceProvider.php"
+      "kind": "config",
+      "upstream": "path",
+      "covered_by": "src/HorizonNewDawnServiceProvider.php"
     },
     {
-      "surface": "config",
-      "id": "prefix",
-      "evidence": "src/Queues/ClearQueueMetadata.php"
+      "kind": "config",
+      "upstream": "prefix",
+      "covered_by": "src/Queues/ClearQueueMetadata.php"
     },
     {
-      "surface": "config",
-      "id": "silenced_tags",
-      "evidence": "src/Monitoring/MonitoringData.php"
+      "kind": "config",
+      "upstream": "silenced_tags",
+      "covered_by": "src/Monitoring/MonitoringData.php"
     },
     {
-      "surface": "config",
-      "id": "trim.completed",
-      "evidence": "src/Queues/QueueSummary.php"
+      "kind": "config",
+      "upstream": "trim.completed",
+      "covered_by": "src/Queues/QueueSummary.php"
     },
     {
-      "surface": "config",
-      "id": "trim.failed",
-      "evidence": "src/Dashboard/DashboardData.php"
+      "kind": "config",
+      "upstream": "trim.failed",
+      "covered_by": "src/Dashboard/DashboardData.php"
     },
     {
-      "surface": "config",
-      "id": "trim.monitored",
-      "evidence": "src/Monitoring/MonitoringData.php"
+      "kind": "config",
+      "upstream": "trim.monitored",
+      "covered_by": "src/Monitoring/MonitoringData.php"
     },
     {
-      "surface": "config",
-      "id": "trim.pending",
-      "evidence": "src/Queues/QueueJobsData.php"
+      "kind": "config",
+      "upstream": "trim.pending",
+      "covered_by": "src/Queues/QueueJobsData.php"
     },
     {
-      "surface": "config",
-      "id": "trim.recent",
-      "evidence": "src/Dashboard/DashboardData.php"
+      "kind": "config",
+      "upstream": "trim.recent",
+      "covered_by": "src/Dashboard/DashboardData.php"
     },
     {
-      "surface": "config",
-      "id": "trim.recent_failed",
-      "evidence": "src/Dashboard/DashboardData.php"
+      "kind": "config",
+      "upstream": "trim.recent_failed",
+      "covered_by": "src/Dashboard/DashboardData.php"
     },
     {
-      "surface": "config",
-      "id": "waits",
-      "evidence": "src/Queues/QueueWaitThreshold.php"
+      "kind": "config",
+      "upstream": "waits",
+      "covered_by": "src/Queues/QueueWaitThreshold.php"
     }
   ]
 }
