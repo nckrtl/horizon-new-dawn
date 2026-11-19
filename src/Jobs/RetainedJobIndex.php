@@ -250,9 +250,7 @@ final class RetainedJobIndex
                     $sourceKey,
                 )
             ) {
-                throw new RuntimeException(
-                    'The retained job index is currently warming.',
-                );
+                throw new RetainedJobIndexWarming;
             }
 
             $this->synchronized[$type->value] = true;
@@ -303,9 +301,7 @@ final class RetainedJobIndex
         $lockToken = $this->acquireSynchronizationLock($type);
 
         if ($lockToken === null) {
-            throw new RuntimeException(
-                'The retained job index is currently warming.',
-            );
+            throw new RetainedJobIndexWarming;
         }
 
         $heartbeat = fn () => $this->renewSynchronizationState(

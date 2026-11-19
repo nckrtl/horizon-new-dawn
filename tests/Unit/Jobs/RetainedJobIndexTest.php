@@ -1097,10 +1097,41 @@ describe('RetainedJobIndex', function (): void {
                 RetainedJobType::Completed,
                 force: true,
             ),
-        )->toThrow(RuntimeException::class, 'currently warming')
+        )->toThrow(RetainedJobIndexWarming::class)
             ->and($client->sortedSets[
                 $initialRequest->projectionKey(RetainedJobType::Completed)
             ] ?? [])->toHaveKey('stale-job')
+            ->and($client->strings[$lockKey])
+            ->toBe('another-synchronization');
+    });
+
+    it('reports a warming index when a request finds another synchronization building it', function (): void {
+        $client = new RetainedJobIndexRedisClient;
+        $client->seedSortedSet('completed_jobs', ['completed-job' => -10]);
+        $repository = retainedJobIndexRepository();
+        dashboardReturnsUsing(
+            $repository,
+            'getJobs',
+            static fn (array $ids): Collection => new Collection(array_map(
+                static fn (string $id, int $index): object => horizonJob($index, $id),
+                $ids,
+                array_keys($ids),
+            )),
+        );
+        $request = new RetainedJobIndex(
+            retainedJobIndexRedisFactory($client),
+            $repository,
+        );
+        $lockKey = str_replace(
+            ':metadata',
+            ':completed:synchronize-lock',
+            $request->metadataKey(),
+        );
+        $client->strings[$lockKey] = 'another-synchronization';
+
+        expect(
+            fn () => $request->synchronize(RetainedJobType::Completed),
+        )->toThrow(RetainedJobIndexWarming::class)
             ->and($client->strings[$lockKey])
             ->toBe('another-synchronization');
     });
