@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Treat a retained-job index that another request is already synchronizing as warming instead of a generic runtime failure, and stop reporting that expected contention to the application's exception handler.
+
 ## [0.1.5] - 2026-07-30
 
 ### Fixed
